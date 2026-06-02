@@ -6,22 +6,7 @@ const NAV = [
       { id: "rh", label: "Turnover & HC", icone: "👥", ativo: true },
     ],
   },
-  {
-    grupo: "Financeiro",
-    itens: [
-      { id: "dre", label: "DRE", icone: "📊", emBreve: true },
-      { id: "fluxo", label: "Fluxo de Caixa", icone: "💰", emBreve: true },
-    ],
-  },
-  {
-    grupo: "Qualidade",
-    itens: [
-      { id: "nps", label: "NPS", icone: "⭐", emBreve: true },
-      { id: "auditorias", label: "Auditorias", icone: "✅", emBreve: true },
-    ],
-  },
 ];
-
 export default function Sidebar({ paginaAtiva }) {
   return (
     <aside
