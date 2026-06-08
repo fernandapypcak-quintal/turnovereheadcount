@@ -2,7 +2,7 @@ import { useState } from "react";
 import KpiCard from "./KpiCard";
 import PainelDetalhe from "./PainelDetalhe";
 import { getKPIs, getRankingUnidades, getHistoricoConsolidado, getMesIndex } from "../utils/calculos";
-import { motivosDesligamento, CUSTO_REPOSICAO, META_TURNOVER } from "../data/mockData";
+import { motivosDesligamento, CUSTO_DESLIGAMENTO, META_TURNOVER } from "../data/mockData";
 
 const STATUS_COR = { ok: "#97A624", atencao: "#D9B504", critico: "#8C1414" };
 const STATUS_BG = { ok: "#F0F5E0", atencao: "#FDF9E0", critico: "#F5E0E0" };
@@ -54,7 +54,7 @@ export default function DashboardRH({ mes, unidade }) {
           prefixo="R$ "
           mono
           cor="vermelho"
-          subtitulo={`${kpi.desligamentos} deslig. × R$ ${CUSTO_REPOSICAO.toLocaleString("pt-BR")}`}
+          subtitulo={`${kpi.desligamentos} deslig. × R$ ${CUSTO_DESLIGAMENTO.toLocaleString("pt-BR")}`}
         />
       </div>
 
