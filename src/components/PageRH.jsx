@@ -1,19 +1,26 @@
 import { useState } from 'react'
 import KpiCard from './KpiCard.jsx'
-import { useGASData } from '../useGASData.js'
+import { useGASData, CONFIG_DEFAULT } from '../useGASData.js'
 import {
   UNIDADES, MESES, HC_IDEAL, HC_REAL, TURNOVER,
   ADMISSOES, DESLIGAMENTOS, EM_EXP, MOTIVOS,
-  CUSTO_ADMISSAO, CUSTO_DEMISSAO, META_TURNOVER
 } from '../data.js'
 
 const COR = { ok:'#97A624', atencao:'#D9B504', critico:'#8C1414' }
 const BG  = { ok:'#F0F5E0', atencao:'#FDF9E0', critico:'#F5E0E0' }
-function st(t) { return t > 9 ? 'critico' : t > META_TURNOVER ? 'atencao' : 'ok' }
 
 export default function PageRH({ mesIdx, unidade }) {
   const [detalhe, setDetalhe] = useState(null)
   const { data: gas, loading, erro } = useGASData(mesIdx)
+
+  // Config viva — usa GAS se disponível, senão usa defaults
+  const cfg = gas?.configuracoes ?? CONFIG_DEFAULT
+  const META         = cfg.semaforo_verde_ambar    ?? 5.0
+  const LIMITE_CRIT  = cfg.semaforo_ambar_vermelho ?? 9.0
+  const CUSTO_ADM    = cfg.custo_contratacao       ?? 2514
+  const CUSTO_DEM    = cfg.custo_demissao          ?? 2724
+
+  function st(t) { return t >= LIMITE_CRIT ? 'critico' : t > META ? 'atencao' : 'ok' }
 
   function hcReal(u)   { return gas?.resumo?.[u]?.hc_real        ?? HC_REAL[u]?.[mesIdx]      ?? 0 }
   function hcIdeal(u)  { return gas?.hc_ideal?.[u]               ?? HC_IDEAL[u]               ?? 0 }
@@ -23,13 +30,12 @@ export default function PageRH({ mesIdx, unidade }) {
   function emExp(u)    { return gas?.resumo?.[u]?.em_experiencia ?? EM_EXP[u]                 ?? 0 }
 
   const uns = unidade === 'Todas' ? UNIDADES : UNIDADES.filter(u => u === unidade)
-
   let hcAt=0,hcId=0,adm=0,des=0,exp=0,turnSum=0
   uns.forEach(u => { hcAt+=hcReal(u); hcId+=hcIdeal(u); adm+=adms(u); des+=desls(u); exp+=emExp(u); turnSum+=turnover(u) })
 
   const turnMedio = Math.round((turnSum/uns.length)*10)/10
   const vagas     = Math.max(0,hcId-hcAt)
-  const custoTurn = (des*CUSTO_DEMISSAO)+(adm*CUSTO_ADMISSAO)
+  const custoTurn = (des*CUSTO_DEM)+(adm*CUSTO_ADM)
   const pctExp    = hcAt>0?Math.round((exp/hcAt)*1000)/10:0
   const ocup      = hcId>0?Math.round((hcAt/hcId)*1000)/10:0
 
@@ -38,8 +44,7 @@ export default function PageRH({ mesIdx, unidade }) {
 
   const ranking = UNIDADES.map(u=>({
     u, hcR:hcReal(u), hcI:hcIdeal(u), turn:turnover(u),
-    adm:adms(u), des:desls(u),
-    desvio:hcReal(u)-hcIdeal(u),
+    adm:adms(u), des:desls(u), desvio:hcReal(u)-hcIdeal(u),
   })).sort((a,b)=>b.turn-a.turn)
   const rankFilt = unidade==='Todas'?ranking:ranking.filter(r=>r.u===unidade)
 
@@ -50,11 +55,11 @@ export default function PageRH({ mesIdx, unidade }) {
       {erro&&<div style={{background:'#FFF5E0',border:'1px solid #D9B504',borderRadius:8,padding:'10px 20px',fontSize:12,color:'#8C1414'}}>⚠️ {erro} — exibindo dados de referência.</div>}
 
       <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:16}}>
-        <KpiCard label="Turnover Médio" valor={turnMedio} sufixo="%" cor={turnMedio>9?'vermelho':turnMedio>META_TURNOVER?'ambar':'verde'}
-          sub={turnMedio>META_TURNOVER?`↑ ${Math.round((turnMedio-META_TURNOVER)*10)/10}pp acima da meta`:`✓ Dentro da meta (${META_TURNOVER}%)`}/>
+        <KpiCard label="Turnover Médio" valor={turnMedio} sufixo="%" cor={st(turnMedio)==='critico'?'vermelho':st(turnMedio)==='atencao'?'ambar':'verde'}
+          sub={turnMedio>META?`↑ ${Math.round((turnMedio-META)*10)/10}pp acima da meta`:`✓ Dentro da meta (${META}%)`}/>
         <KpiCard label="Headcount Atual" valor={hcAt} cor={hcAt>=hcId?'verde':'ambar'} sub={`Meta: ${hcId} · ${vagas>0?`${vagas} vagas abertas`:'Quadro completo'}`}/>
         <KpiCard label="Admissões / Desligamentos" valor={`${adm} / ${des}`} cor={adm>=des?'verde':'vermelho'} sub={`Saldo ${adm-des>=0?'+':''}${adm-des} no período`}/>
-        <KpiCard label="Custo do Turnover" valor={`R$ ${custoTurn.toLocaleString('pt-BR')}`} cor="vermelho" sub={`${des} deslig. × R$ ${CUSTO_DEMISSAO.toLocaleString('pt-BR')}`}/>
+        <KpiCard label="Custo do Turnover" valor={`R$ ${custoTurn.toLocaleString('pt-BR')}`} cor="vermelho" sub={`${des} deslig. × R$ ${Math.round(CUSTO_DEM).toLocaleString('pt-BR')}`}/>
       </div>
 
       <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:16}}>
@@ -84,9 +89,8 @@ export default function PageRH({ mesIdx, unidade }) {
             <div style={{fontWeight:600,fontSize:14,color:'#0D0D0D'}}>Tendência Mensal</div>
             <div style={{fontSize:11,color:'#ABABAB'}}>Turnover % · HC ideal vs atual</div>
           </div>
-          <div style={{padding:20}}><GraficoTendencia mesAtual={mesIdx} gas={gas}/></div>
+          <div style={{padding:20}}><GraficoTendencia mesAtual={mesIdx} gas={gas} meta={META}/></div>
         </div>
-
         <div style={{background:'#fff',border:'1px solid #E8E8E2',borderRadius:8,overflow:'hidden'}}>
           <div style={{padding:'14px 20px',borderBottom:'1px solid #E8E8E2'}}>
             <div style={{fontWeight:600,fontSize:14,color:'#0D0D0D'}}>Motivos de Desligamento</div>
@@ -96,7 +100,6 @@ export default function PageRH({ mesIdx, unidade }) {
             {motivos.slice(0,6).map((m,i)=>{
               const pct=Math.round((m.qtd/totalMot)*1000)/10
               const cores=['#D9B504','#8C1414','#6B0000','#97A624','#888888','#ABABAB']
-              const cor=m.cor||cores[i]||'#888'
               return (
                 <div key={m.motivo}>
                   <div style={{display:'flex',justifyContent:'space-between',marginBottom:4}}>
@@ -107,7 +110,7 @@ export default function PageRH({ mesIdx, unidade }) {
                     </div>
                   </div>
                   <div style={{height:6,background:'#E8E8E2',borderRadius:99}}>
-                    <div style={{height:6,borderRadius:99,width:`${pct}%`,background:cor}}/>
+                    <div style={{height:6,borderRadius:99,width:`${pct}%`,background:m.cor||cores[i]||'#888'}}/>
                   </div>
                 </div>
               )
@@ -160,12 +163,12 @@ export default function PageRH({ mesIdx, unidade }) {
         })}
       </div>
 
-      {detalhe&&<PainelDetalhe unidade={detalhe} mesIdx={mesIdx} gas={gas} onClose={()=>setDetalhe(null)}/>}
+      {detalhe&&<PainelDetalhe unidade={detalhe} mesIdx={mesIdx} gas={gas} meta={META} onClose={()=>setDetalhe(null)}/>}
     </div>
   )
 }
 
-function GraficoTendencia({ mesAtual, gas }) {
+function GraficoTendencia({ mesAtual, gas, meta }) {
   const dados = MESES.map((mes,i)=>{
     let hcR=0,hcI=0,turn=0
     UNIDADES.forEach(u=>{ hcR+=HC_REAL[u][i]; hcI+=HC_IDEAL[u]; turn+=TURNOVER[u][i] })
@@ -176,7 +179,7 @@ function GraficoTendencia({ mesAtual, gas }) {
     return {mes,hcR,hcI,turn:Math.round((turn/UNIDADES.length)*10)/10}
   })
   const maxHC=Math.max(...dados.map(d=>d.hcI))*1.1
-  const maxTurn=Math.max(...dados.map(d=>d.turn),META_TURNOVER)*1.4
+  const maxTurn=Math.max(...dados.map(d=>d.turn),meta)*1.4
   const W=520,H=150,pl=40,pr=16,pt=16,pb=28,cW=W-pl-pr,cH=H-pt-pb,n=dados.length
   const x=i=>pl+(i/(n-1))*cW
   const yH=v=>pt+cH-(v/maxHC)*cH
@@ -187,7 +190,7 @@ function GraficoTendencia({ mesAtual, gas }) {
   return (
     <div>
       <div style={{display:'flex',gap:20,marginBottom:10,flexWrap:'wrap'}}>
-        {[['#0D0D0D','HC Atual',false],['#ABABAB','HC Ideal',true],['#97A624','Turnover %',false],['#D9B504','Meta 5%',true]].map(([cor,lbl,dash])=>(
+        {[['#0D0D0D','HC Atual',false],['#ABABAB','HC Ideal',true],['#97A624','Turnover %',false],['#D9B504',`Meta ${meta}%`,true]].map(([cor,lbl,dash])=>(
           <div key={lbl} style={{display:'flex',alignItems:'center',gap:6}}>
             <svg width="18" height="6"><line x1="0" y1="3" x2="18" y2="3" stroke={cor} strokeWidth="2" strokeDasharray={dash?'3,2':'none'}/></svg>
             <span style={{fontSize:11,color:'#ABABAB'}}>{lbl}</span>
@@ -196,7 +199,7 @@ function GraficoTendencia({ mesAtual, gas }) {
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} style={{width:'100%',height:'auto'}}>
         {[0,.25,.5,.75,1].map(f=><line key={f} x1={pl} y1={pt+cH*f} x2={pl+cW} y2={pt+cH*f} stroke="#E8E8E2" strokeWidth="1"/>)}
-        <line x1={pl} y1={yT(META_TURNOVER)} x2={pl+cW} y2={yT(META_TURNOVER)} stroke="#D9B504" strokeWidth="1.5" strokeDasharray="4,3"/>
+        <line x1={pl} y1={yT(meta)} x2={pl+cW} y2={yT(meta)} stroke="#D9B504" strokeWidth="1.5" strokeDasharray="4,3"/>
         <path d={pHI} fill="none" stroke="#D0D0CA" strokeWidth="1.5" strokeDasharray="4,3"/>
         <path d={pHR} fill="none" stroke="#0D0D0D" strokeWidth="2"/>
         <path d={pT}  fill="none" stroke="#97A624" strokeWidth="2"/>
@@ -214,7 +217,7 @@ function GraficoTendencia({ mesAtual, gas }) {
   )
 }
 
-function PainelDetalhe({ unidade, mesIdx, gas, onClose }) {
+function PainelDetalhe({ unidade, mesIdx, gas, meta, onClose }) {
   const resumo=gas?.resumo?.[unidade]
   const hcR=resumo?.hc_real??HC_REAL[unidade]?.[mesIdx]??0
   const hcI=resumo?.hc_ideal??HC_IDEAL[unidade]??0
@@ -256,7 +259,7 @@ function PainelDetalhe({ unidade, mesIdx, gas, onClose }) {
             <div style={{fontSize:9.5,fontWeight:600,color:'#ABABAB',letterSpacing:'0.08em',textTransform:'uppercase',marginBottom:8}}>Histórico Turnover (referência)</div>
             {MESES.map((mes,i)=>{
               const v=turns[i]??0
-              const cor=v>9?'#8C1414':v>META_TURNOVER?'#D9B504':'#97A624'
+              const cor=v>=9?'#8C1414':v>meta?'#D9B504':'#97A624'
               return (
                 <div key={mes} style={{display:'flex',alignItems:'center',gap:10,marginBottom:6}}>
                   <span style={{fontSize:11,color:'#ABABAB',width:40}}>{mes}</span>

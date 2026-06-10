@@ -1,55 +1,60 @@
 import KpiCard from './KpiCard.jsx'
-import { useGASData } from '../useGASData.js'
-import {
-  UNIDADES, MESES, HC_IDEAL, HC_REAL, ADMISSOES, DESLIGAMENTOS,
-  CUSTO_REAL, CUSTO_IDEAL, CUSTO_ADMISSAO, CUSTO_DEMISSAO, FOLHA_MENSAL
-} from '../data.js'
+import { useGASData, CONFIG_DEFAULT, CUSTO_IDEAL_KEY } from '../useGASData.js'
+import { UNIDADES, MESES, HC_IDEAL, HC_REAL, ADMISSOES, DESLIGAMENTOS, CUSTO_REAL } from '../data.js'
 
 const fmt = v => (v==null||isNaN(Number(v)))?'—':Math.round(Number(v)).toLocaleString('pt-BR')
-
-const COMPOSICAO = [
-  {label:'Salário Base',pct:52,cor:'#0D0D0D'},
-  {label:'Encargos',    pct:21,cor:'#8C1414'},
-  {label:'Benefícios',  pct:12,cor:'#D9B504'},
-  {label:'Provisões',   pct:15,cor:'#97A624'},
-]
 
 export default function PageCustos({ mesIdx, unidade }) {
   const { data: gas, loading, erro } = useGASData(mesIdx)
 
-  function custoReal(u)  { return gas?.custos?.[u]              ?? CUSTO_REAL[u]?.[mesIdx]  ?? 0 }
-  function hcReal(u)     { return gas?.resumo?.[u]?.hc_real     ?? HC_REAL[u]?.[mesIdx]     ?? 0 }
-  function adms(u)       { return gas?.resumo?.[u]?.admissoes   ?? ADMISSOES[u]?.[mesIdx]   ?? 0 }
-  function desls(u)      { return gas?.resumo?.[u]?.desligamentos ?? DESLIGAMENTOS[u]?.[mesIdx] ?? 0 }
+  const cfg = gas?.configuracoes ?? CONFIG_DEFAULT
+  const CUSTO_ADM    = cfg.custo_contratacao   ?? 2514
+  const CUSTO_DEM    = cfg.custo_demissao      ?? 2724
+  const FOLHA_MEN    = cfg.folha_mensal        ?? 1800000
+  const TURN_ANO     = cfg.custo_turnover_ano  ?? 1185202
+  const ADM_REF      = cfg.admissoes_ano_ref   ?? 193
+  const DES_REF      = cfg.desligamentos_ano_ref ?? 257
+
+  const COMPOSICAO = [
+    {label:'Salário Base', pct: cfg.comp_salario_base ?? 52, cor:'#0D0D0D'},
+    {label:'Encargos',     pct: cfg.comp_encargos     ?? 21, cor:'#8C1414'},
+    {label:'Benefícios',   pct: cfg.comp_beneficios   ?? 12, cor:'#D9B504'},
+    {label:'Provisões',    pct: cfg.comp_provisoes    ?? 15, cor:'#97A624'},
+  ]
+
+  function custoIdeal(u) {
+    const key = CUSTO_IDEAL_KEY[u]
+    return (key && cfg[key]) ? cfg[key] : 0
+  }
+  function custoReal(u)  { return gas?.custos?.[u]                ?? CUSTO_REAL[u]?.[mesIdx]      ?? 0 }
+  function hcReal(u)     { return gas?.resumo?.[u]?.hc_real       ?? HC_REAL[u]?.[mesIdx]         ?? 0 }
+  function adms(u)       { return gas?.resumo?.[u]?.admissoes     ?? ADMISSOES[u]?.[mesIdx]       ?? 0 }
+  function desls(u)      { return gas?.resumo?.[u]?.desligamentos ?? DESLIGAMENTOS[u]?.[mesIdx]   ?? 0 }
 
   const uns = unidade==='Todas'?UNIDADES:UNIDADES.filter(u=>u===unidade)
-
   let cr=0,ci=0,adm=0,des=0,hcAt=0
-  uns.forEach(u=>{ cr+=custoReal(u); ci+=CUSTO_IDEAL[u]??0; adm+=adms(u); des+=desls(u); hcAt+=hcReal(u) })
+  uns.forEach(u=>{ cr+=custoReal(u); ci+=custoIdeal(u); adm+=adms(u); des+=desls(u); hcAt+=hcReal(u) })
 
-  const custoTurn = (des*CUSTO_DEMISSAO)+(adm*CUSTO_ADMISSAO)
+  const custoTurn = (des*CUSTO_DEM)+(adm*CUSTO_ADM)
   const cpp       = hcAt>0?Math.round(cr/hcAt):0
   const gapCusto  = ci-cr
-  const pesoTurn  = Math.round((custoTurn/FOLHA_MENSAL)*1000)/10
+  const pesoTurn  = Math.round((custoTurn/FOLHA_MEN)*1000)/10
 
   const rankingCusto = UNIDADES.map(u=>({
-    u, cr:custoReal(u), ci:CUSTO_IDEAL[u]??0,
+    u, cr:custoReal(u), ci:custoIdeal(u),
     hcR:hcReal(u), hcI:HC_IDEAL[u]??0,
     cpp:hcReal(u)>0?Math.round(custoReal(u)/hcReal(u)):0,
-    gap:(CUSTO_IDEAL[u]??0)-custoReal(u),
-    cturn:Math.round((desls(u)*CUSTO_DEMISSAO)+(adms(u)*CUSTO_ADMISSAO)),
+    gap:custoIdeal(u)-custoReal(u),
+    cturn:Math.round((desls(u)*CUSTO_DEM)+(adms(u)*CUSTO_ADM)),
     ocup:HC_IDEAL[u]>0?Math.round((hcReal(u)/HC_IDEAL[u])*1000)/10:0,
   })).sort((a,b)=>b.cr-a.cr)
   const rankFilt = unidade==='Todas'?rankingCusto:rankingCusto.filter(r=>r.u===unidade)
 
-  const historico = MESES.map((mes,i)=>{
-    let hcR=0,ct=0,crH=0
-    UNIDADES.forEach(u=>{
-      crH += i===mesIdx&&gas?.custos?.[u] ? gas.custos[u] : CUSTO_REAL[u]?.[i]??0
-      ct  += (DESLIGAMENTOS[u]?.[i]??0)*CUSTO_DEMISSAO+(ADMISSOES[u]?.[i]??0)*CUSTO_ADMISSAO
-    })
-    return {mes,cr:crH,ct}
-  })
+  const historico = MESES.map((mes,i)=>({
+    mes,
+    cr: UNIDADES.reduce((s,u)=>s+(i===mesIdx&&gas?.custos?.[u]?gas.custos[u]:CUSTO_REAL[u]?.[i]??0),0),
+    ct: UNIDADES.reduce((s,u)=>s+((DESLIGAMENTOS[u]?.[i]??0)*CUSTO_DEM+(ADMISSOES[u]?.[i]??0)*CUSTO_ADM),0),
+  }))
 
   return (
     <div style={{display:'flex',flexDirection:'column',gap:20,paddingBottom:40}}>
@@ -65,8 +70,8 @@ export default function PageCustos({ mesIdx, unidade }) {
       </div>
 
       <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:16}}>
-        <KpiCard label="Desligamentos no Mês" valor={des} cor="vermelho" sub={`× R$ ${fmt(CUSTO_DEMISSAO)} = R$ ${fmt(des*CUSTO_DEMISSAO)}`}/>
-        <KpiCard label="Admissões no Mês"     valor={adm} cor="ambar"   sub={`× R$ ${fmt(CUSTO_ADMISSAO)} = R$ ${fmt(adm*CUSTO_ADMISSAO)}`}/>
+        <KpiCard label="Desligamentos no Mês" valor={des} cor="vermelho" sub={`× R$ ${fmt(CUSTO_DEM)} = R$ ${fmt(des*CUSTO_DEM)}`}/>
+        <KpiCard label="Admissões no Mês"     valor={adm} cor="ambar"   sub={`× R$ ${fmt(CUSTO_ADM)} = R$ ${fmt(adm*CUSTO_ADM)}`}/>
         <div style={{gridColumn:'span 2',background:'#fff',border:'1px solid #E8E8E2',borderRadius:8,padding:'16px 20px'}}>
           <div style={{fontSize:10.5,fontWeight:600,color:'#ABABAB',letterSpacing:'0.08em',textTransform:'uppercase',marginBottom:10}}>Composição do Custo</div>
           <div style={{display:'flex',height:20,borderRadius:4,overflow:'hidden',gap:2,marginBottom:10}}>
@@ -92,16 +97,15 @@ export default function PageCustos({ mesIdx, unidade }) {
           </div>
           <div style={{padding:20}}><GraficoCusto historico={historico} mesAtual={mesIdx}/></div>
         </div>
-
         <div style={{background:'#fff',border:'1px solid #E8E8E2',borderRadius:8,overflow:'hidden'}}>
           <div style={{padding:'14px 20px',borderBottom:'1px solid #E8E8E2'}}>
             <div style={{fontWeight:600,fontSize:14,color:'#0D0D0D'}}>Custo do Turnover</div>
-            <div style={{fontSize:11,color:'#ABABAB'}}>Metodologia interna RH 2025</div>
+            <div style={{fontSize:11,color:'#ABABAB'}}>Metodologia interna RH</div>
           </div>
           <div style={{padding:20,display:'flex',flexDirection:'column',gap:12}}>
             {[
-              {label:'Por Contratação', val:CUSTO_ADMISSAO, cor:'#D9B504',desc:'ATS + recrutamento + exame + uniforme'},
-              {label:'Por Desligamento',val:CUSTO_DEMISSAO, cor:'#8C1414',desc:'Rescisão + multa FGTS + aviso prévio'},
+              {label:'Por Contratação', val:CUSTO_ADM, cor:'#D9B504',desc:'ATS + recrutamento + exame + uniforme'},
+              {label:'Por Desligamento',val:CUSTO_DEM, cor:'#8C1414',desc:'Rescisão + multa FGTS + aviso prévio'},
             ].map(item=>(
               <div key={item.label} style={{background:'#FAFAF8',border:'1px solid #E8E8E2',borderRadius:8,padding:14}}>
                 <div style={{fontSize:9,color:'#ABABAB',textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:4}}>{item.label}</div>
@@ -110,9 +114,9 @@ export default function PageCustos({ mesIdx, unidade }) {
               </div>
             ))}
             <div style={{background:'#0D0D0D',borderRadius:8,padding:14}}>
-              <div style={{fontSize:9,color:'#97A624',textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:4}}>Custo Real do Turnover (2025)</div>
-              <div style={{fontSize:22,fontWeight:700,color:'#fff',fontFamily:"'DM Mono', monospace"}}>R$ 1.185.202</div>
-              <div style={{fontSize:11,color:'#888',marginTop:4}}>5,48% da folha anual · 193 admissões · 257 desligamentos</div>
+              <div style={{fontSize:9,color:'#97A624',textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:4}}>Custo Real do Turnover (ref. anual)</div>
+              <div style={{fontSize:22,fontWeight:700,color:'#fff',fontFamily:"'DM Mono', monospace"}}>R$ {fmt(TURN_ANO)}</div>
+              <div style={{fontSize:11,color:'#888',marginTop:4}}>{ADM_REF} admissões · {DES_REF} desligamentos (referência)</div>
             </div>
           </div>
         </div>
@@ -161,8 +165,8 @@ export default function PageCustos({ mesIdx, unidade }) {
 }
 
 function GraficoCusto({ historico, mesAtual }) {
-  const maxCR=Math.max(...historico.map(h=>h.cr))*1.15
-  const maxCT=Math.max(...historico.map(h=>h.ct))*1.5
+  const maxCR=Math.max(...historico.map(h=>h.cr))*1.15||1
+  const maxCT=Math.max(...historico.map(h=>h.ct))*1.5||1
   const W=520,H=150,pl=50,pr=16,pt=16,pb=28,cW=W-pl-pr,cH=H-pt-pb,n=historico.length
   const x=i=>pl+(i/(n-1))*cW
   const yCR=v=>pt+cH-(v/maxCR)*cH

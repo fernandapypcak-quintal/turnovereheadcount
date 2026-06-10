@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 
 const GAS_URL = "https://script.google.com/macros/s/AKfycby-QXglHGObJS1_YVTonnY0rXkrzkMBQZhwOqBMm2dZ46i53vdJuX7zM1SiEijtQ2H9/exec"
-
 const MESES_API = ['2026-01','2026-02','2026-03','2026-04','2026-05','2026-06']
 
 export function useGASData(mesIdx) {
@@ -21,4 +20,49 @@ export function useGASData(mesIdx) {
   }, [mesIdx])
 
   return { data, loading, erro }
+}
+
+// Valores default caso o GAS ainda não tenha retornado
+export const CONFIG_DEFAULT = {
+  meta_turnover:           5.0,
+  custo_contratacao:       2514,
+  custo_demissao:          2724,
+  folha_mensal:            1800000,
+  custo_turnover_ano:      1185202,
+  admissoes_ano_ref:       193,
+  desligamentos_ano_ref:   257,
+  comp_salario_base:       52,
+  comp_encargos:           21,
+  comp_beneficios:         12,
+  comp_provisoes:          15,
+  semaforo_verde_ambar:    5.0,
+  semaforo_ambar_vermelho: 9.0,
+  custo_ideal_carinas:     237984,
+  custo_ideal_chacara:     82875,
+  custo_ideal_figueiras:   227518,
+  custo_ideal_lapa:        95360,
+  custo_ideal_madalena:    103279,
+  custo_ideal_mariana:     95461,
+  custo_ideal_pavao:       69717,
+  custo_ideal_perdizes:    85281,
+  custo_ideal_santana:     218559,
+  custo_ideal_tatuape:     249294,
+  custo_ideal_holding:     201220,
+  custo_ideal_santoandre:  100000,
+}
+
+// Mapa unidade → chave de custo ideal nas configurações
+export const CUSTO_IDEAL_KEY = {
+  'Carinãs':    'custo_ideal_carinas',
+  'Chácara':    'custo_ideal_chacara',
+  'Figueiras':  'custo_ideal_figueiras',
+  'Lapa':       'custo_ideal_lapa',
+  'Madalena':   'custo_ideal_madalena',
+  'Mariana':    'custo_ideal_mariana',
+  'Pavão':      'custo_ideal_pavao',
+  'Perdizes':   'custo_ideal_perdizes',
+  'Santana':    'custo_ideal_santana',
+  'Tatuapé':    'custo_ideal_tatuape',
+  'Holding':    'custo_ideal_holding',
+  'Santo André':'custo_ideal_santoandre',
 }
