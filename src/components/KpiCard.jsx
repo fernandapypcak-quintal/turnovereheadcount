@@ -29,7 +29,7 @@ export default function KpiCard({ label, valor, subtitulo, cor, prefixo = "", su
           lineHeight: 1.1,
         }}
       >
-        {prefixo}{valor}{sufixo}
+        {prefixo}{valor ?? "—"}{sufixo}
       </p>
       {subtitulo && (
         <p className="text-xs font-medium" style={{ color: corFinal, fontSize: "12px" }}>

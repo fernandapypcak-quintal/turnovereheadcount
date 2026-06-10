@@ -26,15 +26,15 @@ export function getKPIs(mesIndex, unidade) {
     const exp  = emExperiencia[u];
     const custo = custoMensalData[u];
     const cideal = custoIdealData[u];
-    if (!hc) return;
-    hcAtual      += hc.historico[mesIndex];
-    hcIdeal      += hc.ideal;
-    admissoes    += mov.admissoes[mesIndex];
-    desligamentos+= mov.desligamentos[mesIndex];
-    emExp        += exp.experiencia;
-    turnoverSum  += turn[mesIndex];
-    custoReal    += custo[mesIndex];
-    custoIdeal   += cideal;
+    if (!hc || !turn || !mov || !exp || !custo) return;
+    hcAtual      += hc.historico[mesIndex] ?? 0;
+    hcIdeal      += hc.ideal ?? 0;
+    admissoes    += mov.admissoes[mesIndex] ?? 0;
+    desligamentos+= mov.desligamentos[mesIndex] ?? 0;
+    emExp        += exp.experiencia ?? 0;
+    turnoverSum  += turn[mesIndex] ?? 0;
+    custoReal    += custo[mesIndex] ?? 0;
+    custoIdeal   += cideal ?? 0;
   });
 
   const turnoverMedio    = turnoverSum / unidades.length;

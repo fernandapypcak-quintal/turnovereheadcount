@@ -3,7 +3,7 @@ import KpiCard from "./KpiCard";
 import { getKPIs, getRankingUnidades, getHistoricoConsolidado, getMesIndex } from "../utils/calculos";
 import { composicaoCusto, CUSTO_CONTRATACAO, CUSTO_DESLIGAMENTO, FOLHA_ANUAL } from "../data/mockData";
 
-const fmt = (v) => v?.toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+const fmt = (v) => (v == null || isNaN(v)) ? "—" : Number(v).toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
 export default function DashboardCustos({ mes, unidade }) {
   const [unidadeDetalhe, setUnidadeDetalhe] = useState(null);
