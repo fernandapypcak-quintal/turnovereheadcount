@@ -2,7 +2,14 @@ import { useState, useEffect } from 'react'
 
 const GAS_URL = "https://script.google.com/macros/s/AKfycby-QXglHGObJS1_YVTonnY0rXkrzkMBQZhwOqBMm2dZ46i53vdJuX7zM1SiEijtQ2H9/exec"
 
-const MESES_API = ['2026-01','2026-02','2026-03','2026-04','2026-05','2026-06']
+// Meses disponíveis — só adicionar quando a planilha tiver o mês
+export const MESES = ['Jun/26']
+export const MESES_API = ['2026-06']
+
+export const UNIDADES = [
+  'Carinãs','Chácara','Figueiras','Lapa','Madalena',
+  'Mariana','Pavão','Perdizes','Santana','Santo André','Tatuapé','Holding'
+]
 
 export function useGASData(mesIdx) {
   const [data, setData]       = useState(null)
@@ -12,32 +19,23 @@ export function useGASData(mesIdx) {
   useEffect(() => {
     setLoading(true)
     setErro(null)
-
-    // Garante que o índice é número e está dentro do range
     const idx = Math.min(Math.max(Number(mesIdx) || 0, 0), MESES_API.length - 1)
     const mes = MESES_API[idx]
-
-    console.log('GAS fetch → mes:', mes, 'idx:', idx)
-
     fetch(`${GAS_URL}?tipo=todos&mes=${mes}`)
       .then(r => r.json())
-      .then(d => {
-        if (d.erro) throw new Error(d.erro)
-        console.log('GAS recebido → mes retornado:', d.mes, 'hc Carinãs:', d.resumo?.['Carinãs']?.hc_real)
-        setData(d)
-      })
-      .catch(e => { console.error('GAS erro:', e); setErro(e.message) })
+      .then(d => { if (d.erro) throw new Error(d.erro); setData(d) })
+      .catch(e => setErro(e.message))
       .finally(() => setLoading(false))
-
   }, [mesIdx])
 
   return { data, loading, erro }
 }
 
-export const CONFIG_DEFAULT = {
+// Valores padrão das configurações (espelho da aba Configurações)
+export const CFG_DEFAULT = {
   meta_turnover:           5.0,
-  custo_contratacao:       2514,
-  custo_demissao:          2724,
+  custo_contratacao:       2514.32,
+  custo_demissao:          2724.0,
   folha_mensal:            1800000,
   custo_turnover_ano:      1185202,
   admissoes_ano_ref:       193,
