@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 
 const GAS_URL = "https://script.google.com/macros/s/AKfycby-QXglHGObJS1_YVTonnY0rXkrzkMBQZhwOqBMm2dZ46i53vdJuX7zM1SiEijtQ2H9/exec"
+
 const MESES_API = ['2026-01','2026-02','2026-03','2026-04','2026-05','2026-06']
 
 export function useGASData(mesIdx) {
@@ -11,18 +12,28 @@ export function useGASData(mesIdx) {
   useEffect(() => {
     setLoading(true)
     setErro(null)
-    const mes = MESES_API[mesIdx] || '2026-06'
+
+    // Garante que o índice é número e está dentro do range
+    const idx = Math.min(Math.max(Number(mesIdx) || 0, 0), MESES_API.length - 1)
+    const mes = MESES_API[idx]
+
+    console.log('GAS fetch → mes:', mes, 'idx:', idx)
+
     fetch(`${GAS_URL}?tipo=todos&mes=${mes}`)
       .then(r => r.json())
-      .then(d => { if (d.erro) throw new Error(d.erro); setData(d) })
-      .catch(e => { console.error('GAS:', e); setErro(e.message) })
+      .then(d => {
+        if (d.erro) throw new Error(d.erro)
+        console.log('GAS recebido → mes retornado:', d.mes, 'hc Carinãs:', d.resumo?.['Carinãs']?.hc_real)
+        setData(d)
+      })
+      .catch(e => { console.error('GAS erro:', e); setErro(e.message) })
       .finally(() => setLoading(false))
+
   }, [mesIdx])
 
   return { data, loading, erro }
 }
 
-// Valores default caso o GAS ainda não tenha retornado
 export const CONFIG_DEFAULT = {
   meta_turnover:           5.0,
   custo_contratacao:       2514,
@@ -51,7 +62,6 @@ export const CONFIG_DEFAULT = {
   custo_ideal_santoandre:  100000,
 }
 
-// Mapa unidade → chave de custo ideal nas configurações
 export const CUSTO_IDEAL_KEY = {
   'Carinãs':    'custo_ideal_carinas',
   'Chácara':    'custo_ideal_chacara',
