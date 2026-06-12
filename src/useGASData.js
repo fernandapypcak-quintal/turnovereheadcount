@@ -10,7 +10,7 @@ export const UNIDADES = [
   'Mariana','Pavão','Perdizes','Santana','Santo André','Tatuapé','Holding'
 ]
 
-export function useGASData(mesIdx) {
+export function useGASData(mesIdx, unidade) {
   const [data, setData]       = useState(null)
   const [loading, setLoading] = useState(true)
   const [erro, setErro]       = useState(null)
@@ -18,13 +18,13 @@ export function useGASData(mesIdx) {
   useEffect(() => {
     setLoading(true)
     setErro(null)
-    const idx = Math.min(Math.max(Number(mesIdx) || 0, 0), MESES_API.length - 1)
-    const mes = MESES_API[idx]
+    const idx    = Math.min(Math.max(Number(mesIdx) || 0, 0), MESES_API.length - 1)
+    const mes    = MESES_API[idx]
+    const undParam = unidade && unidade !== 'Todas' ? `&unidade=${encodeURIComponent(unidade)}` : ''
 
-    // Busca dados principais e histórico de motivos em paralelo
     Promise.all([
-      fetch(`${GAS_URL}?tipo=todos&mes=${mes}`).then(r => r.json()),
-      fetch(`${GAS_URL}?tipo=motivos_historico`).then(r => r.json()),
+      fetch(`${GAS_URL}?tipo=todos&mes=${mes}${undParam}`).then(r => r.json()),
+      fetch(`${GAS_URL}?tipo=motivos_historico${undParam}`).then(r => r.json()),
     ])
       .then(([principal, historico]) => {
         if (principal.erro) throw new Error(principal.erro)
@@ -33,7 +33,7 @@ export function useGASData(mesIdx) {
       .catch(e => { console.error('GAS erro:', e); setErro(e.message) })
       .finally(() => setLoading(false))
 
-  }, [mesIdx])
+  }, [mesIdx, unidade])
 
   return { data, loading, erro }
 }

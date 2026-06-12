@@ -10,7 +10,7 @@ export default function App() {
   const [mesIdx, setMesIdx]   = useState(0)
   const [unidade, setUnidade] = useState('Todas')
 
-  const { data: gas, loading } = useGASData(mesIdx)
+  const { data: gas, loading } = useGASData(mesIdx, unidade)
   const todasUnidades = ['Todas', ...UNIDADES]
 
   // Data/hora da última atualização
