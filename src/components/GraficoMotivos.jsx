@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 const CORES_MOTIVO = {
   'Demissão sem justa causa':      '#8C1414',
@@ -12,258 +12,192 @@ const CORES_MOTIVO = {
 
 function corMotivo(motivo, idx) {
   if (CORES_MOTIVO[motivo]) return CORES_MOTIVO[motivo]
-  const fallback = ['#0D0D0D','#3D3D3D','#888','#BDBDBD']
-  return fallback[idx % fallback.length]
+  return ['#0D0D0D','#3D3D3D','#888','#BDBDBD'][idx % 4]
 }
 
-function formatarMesLabel(mesStr) {
+function fmtMes(mesStr) {
   if (!mesStr) return ''
   const [ano, mes] = mesStr.split('-')
-  const nomes = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
-  return `${nomes[parseInt(mes)-1]}/${ano.slice(2)}`
+  const n = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
+  return `${n[parseInt(mes)-1]}/${ano.slice(2)}`
 }
 
-// mesSelecionado: "2026-06" — destaca o mês do filtro ativo
 export default function GraficoMotivos({ historico, mesSelecionado }) {
-  const [hoveredMes, setHoveredMes] = useState(null)
-  const [paginaAtual, setPaginaAtual] = useState(0)
+  const [tooltip, setTooltip]     = useState(null) // { mes, motivos, x, y }
+  const [paginaAtual, setPagina]  = useState(0)
+  const containerRef              = useRef(null)
 
-  // Quando o mês selecionado mudar, navega para a página que o contém
+  const ordenado = historico ? [...historico].sort((a,b) => a.mes.localeCompare(b.mes)) : []
+
+  // Navega para o mês selecionado pelo filtro
   useEffect(() => {
-    if (!historico || !mesSelecionado) return
-    const ordenado = [...historico].sort((a, b) => a.mes.localeCompare(b.mes))
+    if (!mesSelecionado || ordenado.length === 0) return
     const idx = ordenado.findIndex(h => h.mes === mesSelecionado)
     if (idx >= 0) {
-      const pagina = Math.floor(idx / 12)
-      const totalPaginas = Math.ceil(ordenado.length / 12)
-      // Converte para paginação invertida (0 = mais recente)
-      setPaginaAtual(totalPaginas - 1 - pagina)
+      const totalPags = Math.ceil(ordenado.length / 12)
+      setPagina(totalPags - 1 - Math.floor(idx / 12))
     }
-  }, [mesSelecionado, historico])
+  }, [mesSelecionado])
 
-  if (!historico || historico.length === 0) {
-    return (
-      <div style={{ padding:40, fontSize:12, color:'#ABABAB', textAlign:'center' }}>
-        Aguardando dados históricos...
-      </div>
-    )
-  }
+  if (ordenado.length === 0) return (
+    <div style={{ padding:40, textAlign:'center', fontSize:12, color:'#ABABAB' }}>
+      Aguardando dados históricos...
+    </div>
+  )
 
-  const historicoOrdenado = [...historico].sort((a, b) => a.mes.localeCompare(b.mes))
+  // Motivos ordenados por total
+  const totais = {}
+  ordenado.forEach(h => Object.entries(h.motivos).forEach(([m,q]) => { totais[m] = (totais[m]||0)+q }))
+  const motivos = Object.keys(totais).sort((a,b) => totais[b]-totais[a])
 
-  // Motivos únicos ordenados por total
-  const totaisPorMotivo = {}
-  historicoOrdenado.forEach(h => {
-    Object.entries(h.motivos).forEach(([m, qtd]) => {
-      totaisPorMotivo[m] = (totaisPorMotivo[m] || 0) + qtd
-    })
-  })
-  const todosMotivos = Object.keys(totaisPorMotivo).sort((a, b) => totaisPorMotivo[b] - totaisPorMotivo[a])
+  const POR_PAG   = 12
+  const totalPags = Math.ceil(ordenado.length / POR_PAG)
+  const pReal     = totalPags - 1 - paginaAtual
+  const pagina    = ordenado.slice(pReal * POR_PAG, (pReal+1) * POR_PAG)
+  const maxTotal  = Math.max(...pagina.map(h => Object.values(h.motivos).reduce((s,v)=>s+v,0)), 1)
 
-  const POR_PAGINA   = 12
-  const totalPaginas = Math.ceil(historicoOrdenado.length / POR_PAGINA)
-  const paginaReal   = totalPaginas - 1 - paginaAtual
-  const inicio       = paginaReal * POR_PAGINA
-  const pagina       = historicoOrdenado.slice(inicio, inicio + POR_PAGINA)
-
-  const maxTotal = Math.max(...pagina.map(h =>
-    Object.values(h.motivos).reduce((s, v) => s + v, 0)
-  ), 1)
-
-  const H       = 220
-  const H_LABEL = 26
-  const BAR_W   = 52
-  const GAP     = 14
-  const W       = pagina.length * (BAR_W + GAP) - GAP
+  // Dimensões das barras em %
+  const BAR_PCT = 100 / pagina.length
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', gap:20 }}>
+    <div style={{ display:'flex', flexDirection:'column', gap:16 }} ref={containerRef}>
 
       {/* Legenda */}
-      <div style={{ display:'flex', flexWrap:'wrap', gap:14 }}>
-        {todosMotivos.map((m, i) => (
-          <div key={m} style={{ display:'flex', alignItems:'center', gap:6 }}>
-            <span style={{ width:12, height:12, borderRadius:2, background:corMotivo(m,i), display:'inline-block', flexShrink:0 }} />
-            <span style={{ fontSize:12, color:'#3D3D3D' }}>{m}</span>
-            <span style={{ fontSize:11, color:'#ABABAB', fontFamily:"'DM Mono', monospace" }}>({totaisPorMotivo[m]})</span>
+      <div style={{ display:'flex', flexWrap:'wrap', gap:12 }}>
+        {motivos.map((m, i) => (
+          <div key={m} style={{ display:'flex', alignItems:'center', gap:5 }}>
+            <span style={{ width:10, height:10, borderRadius:2, background:corMotivo(m,i), flexShrink:0, display:'inline-block' }} />
+            <span style={{ fontSize:11, color:'#3D3D3D' }}>{m}</span>
+            <span style={{ fontSize:10, color:'#ABABAB', fontFamily:"'DM Mono',monospace" }}>({totais[m]})</span>
           </div>
         ))}
       </div>
 
-      {/* Gráfico SVG */}
-      <div style={{ width:'100%', overflowX:'auto' }}>
-        <svg
-          viewBox={`0 0 ${W + 40} ${H + H_LABEL + 10}`}
-          style={{ width:'100%', minWidth: Math.min(W + 40, 500), height:'auto', display:'block' }}
-        >
-          {/* Eixo Y — linhas de grade */}
-          {[0, 0.25, 0.5, 0.75, 1].map(f => (
-            <g key={f}>
-              <line x1={32} y1={H * f} x2={W + 36} y2={H * f} stroke="#E8E8E2" strokeWidth="1" />
-              <text x={28} y={H * f + 3} textAnchor="end" fontSize="9"
-                fill="#BDBDBD" fontFamily="DM Mono, monospace">
-                {Math.round(maxTotal * (1 - f))}
-              </text>
-            </g>
+      {/* Gráfico com barras em HTML — sem SVG para tooltip */}
+      <div style={{ position:'relative' }}>
+        {/* Linhas de grade */}
+        <div style={{ position:'absolute', inset:0, pointerEvents:'none', paddingBottom:24 }}>
+          {[0,0.25,0.5,0.75,1].map(f => (
+            <div key={f} style={{
+              position:'absolute', left:0, right:0,
+              top:`${f*100}%`, borderTop:'1px solid #E8E8E2',
+            }}>
+              <span style={{ position:'absolute', left:-28, top:-6, fontSize:9, color:'#BDBDBD', fontFamily:"'DM Mono',monospace" }}>
+                {Math.round(maxTotal*(1-f))}
+              </span>
+            </div>
           ))}
+        </div>
 
-          {pagina.map((h, i) => {
-            const x         = 34 + i * (BAR_W + GAP)
-            const total     = Object.values(h.motivos).reduce((s, v) => s + v, 0)
-            const isHover   = hoveredMes === h.mes
-            const isSel     = mesSelecionado && h.mes === mesSelecionado
-            let yAcum       = H
+        {/* Barras */}
+        <div style={{ display:'flex', alignItems:'flex-end', gap:8, height:200, paddingLeft:32, paddingBottom:0, position:'relative' }}>
+          {pagina.map((h) => {
+            const total  = Object.values(h.motivos).reduce((s,v)=>s+v,0)
+            const isSel  = h.mes === mesSelecionado
+            const hPct   = total / maxTotal * 100
 
             return (
-              <g key={h.mes}
-                onMouseEnter={() => setHoveredMes(h.mes)}
-                onMouseLeave={() => setHoveredMes(null)}
-                style={{ cursor:'default' }}>
+              <div key={h.mes}
+                style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:0, position:'relative', height:'100%', justifyContent:'flex-end' }}
+                onMouseEnter={e => {
+                  const rect = e.currentTarget.getBoundingClientRect()
+                  const parent = containerRef.current?.getBoundingClientRect()
+                  setTooltip({ mes:h.mes, motivos:h.motivos, total, x: rect.left - (parent?.left||0) + rect.width/2, y: rect.top - (parent?.top||0) })
+                }}
+                onMouseLeave={() => setTooltip(null)}
+              >
+                {/* Total acima */}
+                <div style={{ fontSize:10, color: isSel ? '#0D0D0D' : '#888', fontWeight: isSel ? 700 : 500, fontFamily:"'DM Mono',monospace", marginBottom:4, textAlign:'center' }}>
+                  {total}
+                </div>
 
-                {/* Destaque fundo mês selecionado */}
-                {(isHover || isSel) && (
-                  <rect
-                    x={x - 4} y={0}
-                    width={BAR_W + 8} height={H + H_LABEL + 4}
-                    fill={isSel ? '#F5F5F0' : '#FAFAF8'}
-                    rx="4"
-                  />
-                )}
-
-                {/* Indicador mês selecionado */}
-                {isSel && (
-                  <rect x={x - 4} y={0} width={BAR_W + 8} height={3}
-                    fill="#0D0D0D" rx="1" />
-                )}
-
-                {/* Barras empilhadas */}
-                {todosMotivos.map((m, mi) => {
-                  const qtd  = h.motivos[m] || 0
-                  if (qtd === 0) return null
-                  const barH = (qtd / maxTotal) * H
-                  yAcum -= barH
-                  return (
-                    <rect key={m}
-                      x={x} y={yAcum}
-                      width={BAR_W} height={barH}
-                      fill={corMotivo(m, mi)}
-                      opacity={isHover || isSel ? 1 : 0.85}
-                    />
-                  )
-                })}
-
-                {/* Total acima da barra */}
-                {total > 0 && (
-                  <text
-                    x={x + BAR_W / 2}
-                    y={H - (total / maxTotal) * H - 7}
-                    textAnchor="middle"
-                    fontSize={isHover || isSel ? 11 : 10}
-                    fontWeight={isHover || isSel ? '700' : '500'}
-                    fill={isHover || isSel ? '#0D0D0D' : '#888'}
-                    fontFamily="DM Mono, monospace"
-                  >
-                    {total}
-                  </text>
-                )}
-
-                {/* Label mês */}
-                <text
-                  x={x + BAR_W / 2}
-                  y={H + 18}
-                  textAnchor="middle"
-                  fontSize={10}
-                  fill={isSel ? '#0D0D0D' : isHover ? '#3D3D3D' : '#ABABAB'}
-                  fontWeight={isSel ? '700' : isHover ? '600' : '400'}
-                  fontFamily="DM Sans, sans-serif"
-                >
-                  {formatarMesLabel(h.mes)}
-                </text>
-
-                {/* Tooltip hover */}
-                {isHover && total > 0 && (() => {
-                  const linhas = todosMotivos.filter(m => h.motivos[m] > 0)
-                  const ttW    = 150
-                  const ttH    = linhas.length * 13 + 22
-                  const barTop = H - (total / maxTotal) * H
-                  const ttY    = Math.max(2, barTop - ttH - 8)
-                  // Garante que não sai pela direita nem pela esquerda
-                  const ttXraw = x + BAR_W / 2 - ttW / 2
-                  const ttX    = Math.max(32, Math.min(ttXraw, W + 36 - ttW - 4))
-                  return (
-                    <g style={{ pointerEvents:'none' }}>
-                      <rect x={ttX} y={ttY} width={ttW} height={ttH}
-                        fill="white" stroke="#E8E8E2" strokeWidth="1" rx="4" />
-                      <text x={ttX + 8} y={ttY + 12}
-                        fontSize={9} fontWeight="700" fill="#0D0D0D"
-                        fontFamily="DM Sans, sans-serif">
-                        {formatarMesLabel(h.mes)} · {total} deslig.
-                      </text>
-                      {linhas.map((m, ti) => (
-                        <g key={m}>
-                          <rect x={ttX + 8} y={ttY + 18 + ti * 13}
-                            width={6} height={6} rx="1"
-                            fill={corMotivo(m, todosMotivos.indexOf(m))} />
-                          <text x={ttX + 17} y={ttY + 25 + ti * 13}
-                            fontSize={8} fill="#3D3D3D"
-                            fontFamily="DM Sans, sans-serif">
-                            {m.length > 22 ? m.substring(0,22)+'…' : m}: {h.motivos[m]}
-                          </text>
-                        </g>
-                      ))}
-                    </g>
-                  )
-                })()}
-              </g>
+                {/* Barra empilhada */}
+                <div style={{
+                  width:'100%', height:`${hPct}%`,
+                  display:'flex', flexDirection:'column-reverse',
+                  borderRadius:'3px 3px 0 0', overflow:'hidden',
+                  outline: isSel ? '2px solid #0D0D0D' : 'none',
+                  outlineOffset: 1,
+                }}>
+                  {motivos.map((m, mi) => {
+                    const q = h.motivos[m] || 0
+                    if (!q) return null
+                    return (
+                      <div key={m} style={{
+                        width:'100%',
+                        height:`${(q/total)*100}%`,
+                        background: corMotivo(m, mi),
+                        flexShrink:0,
+                      }} />
+                    )
+                  })}
+                </div>
+              </div>
             )
           })}
-        </svg>
+        </div>
+
+        {/* Labels meses */}
+        <div style={{ display:'flex', gap:8, paddingLeft:32, marginTop:6 }}>
+          {pagina.map(h => (
+            <div key={h.mes} style={{
+              flex:1, textAlign:'center', fontSize:10,
+              color: h.mes === mesSelecionado ? '#0D0D0D' : '#ABABAB',
+              fontWeight: h.mes === mesSelecionado ? 700 : 400,
+              fontFamily:"'DM Sans',sans-serif",
+            }}>
+              {fmtMes(h.mes)}
+            </div>
+          ))}
+        </div>
+
+        {/* Tooltip HTML */}
+        {tooltip && (
+          <div style={{
+            position:'absolute',
+            left: Math.min(tooltip.x - 80, (containerRef.current?.offsetWidth||400) - 172),
+            top: Math.max(0, tooltip.y - 10),
+            background:'white', border:'1px solid #E8E8E2',
+            borderRadius:6, padding:'8px 10px',
+            boxShadow:'0 4px 12px rgba(0,0,0,0.10)',
+            zIndex:10, pointerEvents:'none', minWidth:160,
+          }}>
+            <div style={{ fontSize:11, fontWeight:700, color:'#0D0D0D', marginBottom:6, fontFamily:"'DM Sans',sans-serif" }}>
+              {fmtMes(tooltip.mes)} · {tooltip.total} desligamentos
+            </div>
+            {motivos.filter(m => tooltip.motivos[m] > 0).map((m, i) => (
+              <div key={m} style={{ display:'flex', alignItems:'center', gap:6, marginBottom:3 }}>
+                <span style={{ width:8, height:8, borderRadius:2, background:corMotivo(m,i), flexShrink:0 }} />
+                <span style={{ fontSize:11, color:'#3D3D3D', fontFamily:"'DM Sans',sans-serif", flex:1 }}>{m}</span>
+                <span style={{ fontSize:11, fontWeight:600, color:'#0D0D0D', fontFamily:"'DM Mono',monospace" }}>{tooltip.motivos[m]}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Paginação */}
-      {totalPaginas > 1 && (
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-          <button
-            onClick={() => setPaginaAtual(p => Math.min(totalPaginas - 1, p + 1))}
-            disabled={paginaAtual >= totalPaginas - 1}
-            style={{
-              padding:'6px 16px', borderRadius:6,
-              border:'1px solid #E8E8E2', background:'#fff',
-              cursor: paginaAtual >= totalPaginas - 1 ? 'not-allowed' : 'pointer',
-              color: paginaAtual >= totalPaginas - 1 ? '#BDBDBD' : '#0D0D0D',
-              fontSize:12, fontFamily:"'DM Sans', sans-serif",
-            }}>
+      {totalPags > 1 && (
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', paddingTop:4 }}>
+          <button onClick={() => setPagina(p => Math.min(totalPags-1, p+1))}
+            disabled={paginaAtual >= totalPags-1}
+            style={{ padding:'5px 14px', borderRadius:6, border:'1px solid #E8E8E2', background:'#fff', cursor: paginaAtual>=totalPags-1?'not-allowed':'pointer', color: paginaAtual>=totalPags-1?'#BDBDBD':'#0D0D0D', fontSize:12, fontFamily:"'DM Sans',sans-serif" }}>
             ← Mais antigo
           </button>
-
-          <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6 }}>
-            <span style={{ fontSize:12, color:'#0D0D0D', fontWeight:600 }}>
-              {formatarMesLabel(pagina[0]?.mes)} – {formatarMesLabel(pagina[pagina.length-1]?.mes)}
+          <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:5 }}>
+            <span style={{ fontSize:12, fontWeight:600, color:'#0D0D0D' }}>
+              {fmtMes(pagina[0]?.mes)} – {fmtMes(pagina[pagina.length-1]?.mes)}
             </span>
             <div style={{ display:'flex', gap:4 }}>
-              {Array.from({ length: totalPaginas }).map((_, pi) => (
-                <div key={pi}
-                  onClick={() => setPaginaAtual(pi)}
-                  style={{
-                    width: pi === paginaAtual ? 18 : 6, height:6,
-                    borderRadius:99, cursor:'pointer',
-                    background: pi === paginaAtual ? '#0D0D0D' : '#E8E8E2',
-                    transition:'width 0.2s',
-                  }} />
+              {Array.from({length:totalPags}).map((_,pi) => (
+                <div key={pi} onClick={() => setPagina(pi)}
+                  style={{ width: pi===paginaAtual?18:6, height:6, borderRadius:99, cursor:'pointer', background: pi===paginaAtual?'#0D0D0D':'#E8E8E2', transition:'width 0.2s' }} />
               ))}
             </div>
           </div>
-
-          <button
-            onClick={() => setPaginaAtual(p => Math.max(0, p - 1))}
+          <button onClick={() => setPagina(p => Math.max(0, p-1))}
             disabled={paginaAtual === 0}
-            style={{
-              padding:'6px 16px', borderRadius:6,
-              border:'1px solid #E8E8E2', background:'#fff',
-              cursor: paginaAtual === 0 ? 'not-allowed' : 'pointer',
-              color: paginaAtual === 0 ? '#BDBDBD' : '#0D0D0D',
-              fontSize:12, fontFamily:"'DM Sans', sans-serif",
-            }}>
+            style={{ padding:'5px 14px', borderRadius:6, border:'1px solid #E8E8E2', background:'#fff', cursor: paginaAtual===0?'not-allowed':'pointer', color: paginaAtual===0?'#BDBDBD':'#0D0D0D', fontSize:12, fontFamily:"'DM Sans',sans-serif" }}>
             Mais recente →
           </button>
         </div>
