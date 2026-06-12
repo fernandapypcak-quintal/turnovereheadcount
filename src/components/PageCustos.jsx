@@ -1,10 +1,11 @@
 import KpiCard from './KpiCard.jsx'
-import { useGASData, CFG_DEFAULT, CUSTO_IDEAL_KEY, UNIDADES, MESES } from '../useGASData.js'
+import { CFG_DEFAULT, CUSTO_IDEAL_KEY, UNIDADES, MESES } from '../useGASData.js'
 
 const fmt = v => (v == null || isNaN(Number(v))) ? '—' : Math.round(Number(v)).toLocaleString('pt-BR')
 
-export default function PageCustos({ mesIdx, unidade }) {
-  const { data: gas, loading, erro } = useGASData(mesIdx)
+export default function PageCustos({ mesIdx, unidade, gas, loading }) {
+  // gas e loading vêm do App.jsx via props
+  const erro = null
 
   const cfg  = gas?.configuracoes ?? CFG_DEFAULT
   const CADM = cfg.custo_contratacao   ?? 2514

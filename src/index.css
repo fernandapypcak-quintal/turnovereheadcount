@@ -6,3 +6,25 @@
 body { font-family: 'DM Sans', sans-serif; background: #FAFAF8; -webkit-font-smoothing: antialiased; }
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-thumb { background: #D0D0CA; border-radius: 99px; }
+
+/* ── Print / PDF ─────────────────────────────────── */
+@media print {
+  .no-print { display: none !important; }
+  .print-only { display: block !important; }
+
+  body { background: white !important; }
+
+  /* Sidebar some */
+  aside { display: none !important; }
+
+  /* Remove overflow para imprimir tudo */
+  .flex.h-screen { height: auto !important; overflow: visible !important; }
+  div[style*="overflow-y: auto"] { overflow: visible !important; height: auto !important; }
+  div[style*="overflowY: auto"] { overflow: visible !important; height: auto !important; }
+
+  /* Evita quebra dentro de cards */
+  [style*="border-radius: 8px"] { break-inside: avoid; }
+
+  /* Painel lateral some */
+  [style*="position: fixed"] { display: none !important; }
+}

@@ -1,24 +1,23 @@
 import { useState } from 'react'
 import KpiCard from './KpiCard.jsx'
-import { useGASData, CFG_DEFAULT, UNIDADES, MESES } from '../useGASData.js'
+import AlertasBanner from './AlertasBanner.jsx'
+import { CFG_DEFAULT, UNIDADES, MESES } from '../useGASData.js'
 
 const COR = { ok:'#97A624', atencao:'#D9B504', critico:'#8C1414' }
 const BG  = { ok:'#F0F5E0', atencao:'#FDF9E0', critico:'#F5E0E0' }
 const fmt = v => v == null ? '—' : Number(v).toLocaleString('pt-BR')
 
-export default function PageRH({ mesIdx, unidade }) {
+export default function PageRH({ mesIdx, unidade, gas, loading }) {
   const [detalhe, setDetalhe] = useState(null)
-  const { data: gas, loading, erro } = useGASData(mesIdx)
 
-  const cfg   = gas?.configuracoes ?? CFG_DEFAULT
-  const META  = cfg.semaforo_verde_ambar    ?? 5
-  const CRIT  = cfg.semaforo_ambar_vermelho ?? 9
-  const CADM  = cfg.custo_contratacao      ?? 2514
-  const CDEM  = cfg.custo_demissao         ?? 2724
+  const cfg  = gas?.configuracoes ?? CFG_DEFAULT
+  const META = cfg.semaforo_verde_ambar    ?? 5
+  const CRIT = cfg.semaforo_ambar_vermelho ?? 9
+  const CADM = cfg.custo_contratacao      ?? 2514
+  const CDEM = cfg.custo_demissao         ?? 2724
 
   function st(t) { return t >= CRIT ? 'critico' : t > META ? 'atencao' : 'ok' }
 
-  // Lê direto do resumo do GAS — sem fallback mock
   function r(u, campo, def = 0) {
     if (!gas?.resumo?.[u]) return def
     const v = gas.resumo[u][campo]
@@ -26,7 +25,6 @@ export default function PageRH({ mesIdx, unidade }) {
   }
 
   const uns = unidade === 'Todas' ? UNIDADES : [unidade]
-
   let hcAt=0, hcId=0, adm=0, des=0, exp=0, turnSum=0
   uns.forEach(u => {
     hcAt    += r(u, 'hc_real')
@@ -43,36 +41,33 @@ export default function PageRH({ mesIdx, unidade }) {
   const pctExp    = hcAt > 0 ? Math.round((exp / hcAt) * 1000) / 10 : 0
   const ocup      = hcId > 0 ? Math.round((hcAt / hcId) * 1000) / 10 : 0
 
-  // Motivos do GAS — sem fallback
-  const motivos   = gas?.motivos ?? []
-  const totalMot  = motivos.reduce((s, m) => s + m.qtd, 0)
+  const motivos  = gas?.motivos ?? []
+  const totalMot = motivos.reduce((s, m) => s + m.qtd, 0)
 
-  // Ranking — só quando GAS carregou
   const ranking = gas?.resumo
     ? UNIDADES.map(u => ({
         u,
-        hcR:   r(u, 'hc_real'),
-        hcI:   r(u, 'hc_ideal'),
-        turn:  r(u, 'turnover'),
-        adm:   r(u, 'admissoes'),
-        des:   r(u, 'desligamentos'),
-        exp:   r(u, 'em_experiencia'),
+        hcR:    r(u, 'hc_real'),
+        hcI:    r(u, 'hc_ideal'),
+        turn:   r(u, 'turnover'),
+        adm:    r(u, 'admissoes'),
+        des:    r(u, 'desligamentos'),
+        exp:    r(u, 'em_experiencia'),
         pctExp: r(u, 'pct_experiencia'),
         desvio: r(u, 'desvio'),
         status: r(u, 'status', 'ok'),
       })).sort((a, b) => b.turn - a.turn)
     : []
 
-  const rankFilt = unidade === 'Todas' ? ranking : ranking.filter(r => r.u === unidade)
-
-  const corTurn = st(turnMedio)
+  const rankFilt = unidade === 'Todas' ? ranking : ranking.filter(x => x.u === unidade)
+  const corTurn  = st(turnMedio)
 
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:20, paddingBottom:40 }}>
 
-      {/* Status barra */}
-      {loading && <Aviso tipo="info" msg="⏳ Carregando dados do Google Sheets..." />}
-      {erro    && <Aviso tipo="erro" msg={`⚠️ Erro ao carregar: ${erro}`} />}
+      {/* Alertas automáticos */}
+      {!loading && <AlertasBanner gas={gas} cfg={cfg} />}
+      {loading   && <Aviso tipo="info" msg="⏳ Carregando dados do Google Sheets..." />}
 
       {/* KPIs linha 1 */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:16 }}>
@@ -101,7 +96,6 @@ export default function PageRH({ mesIdx, unidade }) {
         <KpiCard label="Admissões no Mês" valor={adm}
           cor={adm > 0 ? 'verde' : 'cinza'}
           sub={`Custo estimado: R$ ${fmt(adm * CADM)}`} />
-        {/* Barra ocupação */}
         <div style={{ background:'#fff', border:'1px solid #E8E8E2', borderRadius:8, padding:'16px 20px' }}>
           <div style={{ fontSize:10.5, fontWeight:600, color:'#ABABAB', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:6 }}>Ocupação Geral</div>
           <div style={{ fontSize:26, fontWeight:700, color:'#0D0D0D', fontFamily:"'DM Mono', monospace" }}>{ocup}%</div>
@@ -112,10 +106,8 @@ export default function PageRH({ mesIdx, unidade }) {
         </div>
       </div>
 
-      {/* Motivos + Info meses */}
+      {/* Resumo por unidade + Motivos */}
       <div style={{ display:'grid', gridTemplateColumns:'1fr 320px', gap:16 }}>
-
-        {/* Painel info — explica que histórico cresce com o tempo */}
         <div style={{ background:'#fff', border:'1px solid #E8E8E2', borderRadius:8, overflow:'hidden' }}>
           <div style={{ padding:'14px 20px', borderBottom:'1px solid #E8E8E2' }}>
             <div style={{ fontWeight:600, fontSize:14, color:'#0D0D0D' }}>Resumo por Unidade</div>
@@ -133,7 +125,7 @@ export default function PageRH({ mesIdx, unidade }) {
                   const s   = st(t)
                   const oc  = hcI > 0 ? Math.round((hcR / hcI) * 100) : 0
                   return (
-                    <div key={u} style={{ padding:'10px 12px', background:'#FAFAF8', borderRadius:6, border:'1px solid #E8E8E2' }}>
+                    <div key={u} style={{ padding:'10px 12px', background:'#FAFAF8', borderRadius:6, border:`1px solid ${s !== 'ok' ? COR[s] : '#E8E8E2'}` }}>
                       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
                         <span style={{ fontSize:12, fontWeight:600, color:'#0D0D0D' }}>{u}</span>
                         <span style={{ fontSize:10, fontWeight:600, padding:'1px 6px', borderRadius:99, background:BG[s], color:COR[s] }}>
@@ -155,7 +147,6 @@ export default function PageRH({ mesIdx, unidade }) {
           </div>
         </div>
 
-        {/* Motivos */}
         <div style={{ background:'#fff', border:'1px solid #E8E8E2', borderRadius:8, overflow:'hidden' }}>
           <div style={{ padding:'14px 20px', borderBottom:'1px solid #E8E8E2' }}>
             <div style={{ fontWeight:600, fontSize:14, color:'#0D0D0D' }}>Motivos de Desligamento</div>
@@ -165,7 +156,7 @@ export default function PageRH({ mesIdx, unidade }) {
             {motivos.length === 0 ? (
               <div style={{ fontSize:12, color:'#ABABAB' }}>Aguardando dados...</div>
             ) : motivos.slice(0, 6).map((m, i) => {
-              const pct = totalMot > 0 ? Math.round((m.qtd / totalMot) * 1000) / 10 : 0
+              const pct  = totalMot > 0 ? Math.round((m.qtd / totalMot) * 1000) / 10 : 0
               const cores = ['#8C1414','#D9B504','#97A624','#6B0000','#888','#ABABAB']
               return (
                 <div key={m.motivo}>
@@ -186,7 +177,7 @@ export default function PageRH({ mesIdx, unidade }) {
         </div>
       </div>
 
-      {/* Tabela ranking */}
+      {/* Ranking */}
       <div style={{ background:'#fff', border:'1px solid #E8E8E2', borderRadius:8, overflow:'hidden' }}>
         <div style={{ padding:'14px 20px', borderBottom:'1px solid #E8E8E2', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
           <div>
@@ -202,17 +193,12 @@ export default function PageRH({ mesIdx, unidade }) {
             ))}
           </div>
         </div>
-
         <div style={{ display:'grid', gridTemplateColumns:'1.6fr 80px 70px 70px 70px 70px 80px 80px 70px', background:'#0D0D0D', padding:'8px 20px' }}>
           {['Unidade','Turnover','HC Atual','HC Ideal','Desvio','Vagas','Admis.','Deslig.','Exp. %'].map((h, i) => (
             <div key={h} style={{ fontSize:9.5, fontWeight:600, color:'#fff', letterSpacing:'0.07em', textTransform:'uppercase', textAlign: i === 0 ? 'left' : 'center' }}>{h}</div>
           ))}
         </div>
-
-        {rankFilt.length === 0 && (
-          <div style={{ padding:'20px', fontSize:12, color:'#ABABAB' }}>Aguardando dados...</div>
-        )}
-
+        {rankFilt.length === 0 && <div style={{ padding:20, fontSize:12, color:'#ABABAB' }}>Aguardando dados...</div>}
         {rankFilt.map((row, i) => {
           const s = st(row.turn)
           return (
@@ -240,21 +226,24 @@ export default function PageRH({ mesIdx, unidade }) {
 }
 
 function PainelDetalhe({ unidade, gas, cfg, mesIdx, onClose }) {
-  const META = cfg?.semaforo_verde_ambar ?? 5
+  const META = cfg?.semaforo_verde_ambar    ?? 5
   const CRIT = cfg?.semaforo_ambar_vermelho ?? 9
   function st(t) { return t >= CRIT ? 'critico' : t > META ? 'atencao' : 'ok' }
 
   const res    = gas?.resumo?.[unidade] ?? {}
-  const hcR    = res.hc_real    ?? 0
-  const hcI    = res.hc_ideal   ?? 0
-  const desvio = res.desvio     ?? (hcR - hcI)
+  const hcR    = res.hc_real       ?? 0
+  const hcI    = res.hc_ideal      ?? 0
+  const desvio = res.desvio        ?? (hcR - hcI)
   const ocup   = hcI > 0 ? Math.round((hcR / hcI) * 1000) / 10 : 0
-  const turn   = res.turnover   ?? 0
-  const adm    = res.admissoes  ?? 0
+  const turn   = res.turnover      ?? 0
+  const adm    = res.admissoes     ?? 0
   const des    = res.desligamentos ?? 0
-  const exp    = res.em_experiencia ?? 0
-  const pctExp = res.pct_experiencia ?? 0
+  const exp    = res.em_experiencia   ?? 0
+  const pctExp = res.pct_experiencia  ?? 0
   const s      = st(turn)
+
+  const COR = { ok:'#97A624', atencao:'#D9B504', critico:'#8C1414' }
+  const BG  = { ok:'#F0F5E0', atencao:'#FDF9E0', critico:'#F5E0E0' }
 
   return (
     <>
@@ -268,21 +257,17 @@ function PainelDetalhe({ unidade, gas, cfg, mesIdx, onClose }) {
           <button onClick={onClose} style={{ width:30, height:30, borderRadius:6, border:'none', background:'#F5F5F0', cursor:'pointer', fontSize:18 }}>×</button>
         </div>
         <div style={{ flex:1, overflowY:'auto', padding:20, display:'flex', flexDirection:'column', gap:16 }}>
-
-          {/* Turnover */}
-          <div style={{ background: BG[s], border:`1px solid ${COR[s]}`, borderRadius:8, padding:'12px 16px' }}>
+          <div style={{ background:BG[s], border:`1px solid ${COR[s]}`, borderRadius:8, padding:'12px 16px' }}>
             <div style={{ fontSize:9, color:COR[s], textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:4 }}>Turnover</div>
             <div style={{ fontSize:28, fontWeight:700, color:COR[s], fontFamily:"'DM Mono', monospace" }}>{turn}%</div>
             <div style={{ fontSize:11, color:COR[s], marginTop:2 }}>
               {turn === 0 ? 'Sem desligamentos no período' : s === 'ok' ? '✓ Dentro da meta' : s === 'atencao' ? '⚠ Acima da meta' : '⚠ Crítico'}
             </div>
           </div>
-
-          {/* HC */}
           <div>
             <div style={{ fontSize:9.5, fontWeight:600, color:'#ABABAB', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:8 }}>Headcount</div>
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8 }}>
-              {[['Atual', hcR, '#0D0D0D'], ['Ideal', hcI, '#ABABAB'], ['Desvio', desvio >= 0 ? `+${desvio}` : desvio, desvio >= 0 ? '#97A624' : '#8C1414']].map(([lbl, val, cor]) => (
+              {[['Atual',hcR,'#0D0D0D'],['Ideal',hcI,'#ABABAB'],['Desvio',desvio>=0?`+${desvio}`:desvio,desvio>=0?'#97A624':'#8C1414']].map(([lbl,val,cor])=>(
                 <div key={lbl} style={{ background:'#FAFAF8', border:'1px solid #E8E8E2', borderRadius:8, padding:12 }}>
                   <div style={{ fontSize:9, color:'#ABABAB', textTransform:'uppercase', marginBottom:4 }}>{lbl}</div>
                   <div style={{ fontSize:22, fontWeight:700, color:cor, fontFamily:"'DM Mono', monospace" }}>{val}</div>
@@ -291,20 +276,17 @@ function PainelDetalhe({ unidade, gas, cfg, mesIdx, onClose }) {
             </div>
             <div style={{ marginTop:10 }}>
               <div style={{ display:'flex', justifyContent:'space-between', fontSize:11, color:'#ABABAB', marginBottom:4 }}>
-                <span>Ocupação</span>
-                <span style={{ fontFamily:"'DM Mono', monospace" }}>{ocup}%</span>
+                <span>Ocupação</span><span style={{ fontFamily:"'DM Mono', monospace" }}>{ocup}%</span>
               </div>
               <div style={{ height:8, background:'#E8E8E2', borderRadius:99 }}>
-                <div style={{ height:8, borderRadius:99, width:`${Math.min(100, ocup)}%`, background: ocup >= 100 ? '#97A624' : ocup >= 85 ? '#D9B504' : '#8C1414' }} />
+                <div style={{ height:8, borderRadius:99, width:`${Math.min(100,ocup)}%`, background:ocup>=100?'#97A624':ocup>=85?'#D9B504':'#8C1414' }}/>
               </div>
             </div>
           </div>
-
-          {/* Movimentação */}
           <div>
             <div style={{ fontSize:9.5, fontWeight:600, color:'#ABABAB', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:8 }}>Movimentação no Mês</div>
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-              {[['Admissões', adm, '#97A624'], ['Desligamentos', des, des > 0 ? '#8C1414' : '#ABABAB']].map(([lbl, val, cor]) => (
+              {[['Admissões',adm,'#97A624'],['Desligamentos',des,des>0?'#8C1414':'#ABABAB']].map(([lbl,val,cor])=>(
                 <div key={lbl} style={{ background:'#FAFAF8', border:'1px solid #E8E8E2', borderRadius:8, padding:12 }}>
                   <div style={{ fontSize:9, color:'#ABABAB', textTransform:'uppercase', marginBottom:4 }}>{lbl}</div>
                   <div style={{ fontSize:22, fontWeight:700, color:cor, fontFamily:"'DM Mono', monospace" }}>{val}</div>
@@ -312,18 +294,14 @@ function PainelDetalhe({ unidade, gas, cfg, mesIdx, onClose }) {
               ))}
             </div>
           </div>
-
-          {/* Em experiência */}
           <div>
             <div style={{ fontSize:9.5, fontWeight:600, color:'#ABABAB', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:8 }}>Em Experiência (&lt;90 dias)</div>
-            <div style={{ background:'#FAFAF8', border:'1px solid #E8E8E2', borderRadius:8, padding:14 }}>
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                <div>
-                  <div style={{ fontSize:22, fontWeight:700, color: pctExp > 20 ? '#8C1414' : '#0D0D0D', fontFamily:"'DM Mono', monospace" }}>{exp}</div>
-                  <div style={{ fontSize:11, color:'#ABABAB' }}>colaboradores em experiência</div>
-                </div>
-                <div style={{ fontSize:18, fontWeight:700, color: pctExp > 20 ? '#8C1414' : pctExp > 12 ? '#D9B504' : '#97A624', fontFamily:"'DM Mono', monospace" }}>{Math.round(pctExp)}%</div>
+            <div style={{ background:'#FAFAF8', border:'1px solid #E8E8E2', borderRadius:8, padding:14, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+              <div>
+                <div style={{ fontSize:22, fontWeight:700, color:pctExp>20?'#8C1414':'#0D0D0D', fontFamily:"'DM Mono', monospace" }}>{exp}</div>
+                <div style={{ fontSize:11, color:'#ABABAB' }}>colaboradores</div>
               </div>
+              <div style={{ fontSize:18, fontWeight:700, color:pctExp>20?'#8C1414':pctExp>12?'#D9B504':'#97A624', fontFamily:"'DM Mono', monospace" }}>{Math.round(pctExp)}%</div>
             </div>
           </div>
         </div>
@@ -333,11 +311,8 @@ function PainelDetalhe({ unidade, gas, cfg, mesIdx, onClose }) {
 }
 
 function Aviso({ tipo, msg }) {
-  const bg  = tipo === 'erro' ? '#FFF5E0' : '#F5F5F0'
-  const bdr = tipo === 'erro' ? '#D9B504' : '#E8E8E2'
-  const cor = tipo === 'erro' ? '#8C1414' : '#ABABAB'
   return (
-    <div style={{ background:bg, border:`1px solid ${bdr}`, borderRadius:8, padding:'10px 20px', fontSize:12, color:cor }}>
+    <div style={{ background:'#F5F5F0', border:'1px solid #E8E8E2', borderRadius:8, padding:'10px 20px', fontSize:12, color:'#ABABAB' }}>
       {msg}
     </div>
   )
