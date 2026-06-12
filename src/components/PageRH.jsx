@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import KpiCard from './KpiCard.jsx'
 import AlertasBanner from './AlertasBanner.jsx'
+import GraficoMotivos from './GraficoMotivos.jsx'
 import { CFG_DEFAULT, UNIDADES, MESES } from '../useGASData.js'
 
 const COR = { ok:'#97A624', atencao:'#D9B504', critico:'#8C1414' }
@@ -150,29 +151,10 @@ export default function PageRH({ mesIdx, unidade, gas, loading }) {
         <div style={{ background:'#fff', border:'1px solid #E8E8E2', borderRadius:8, overflow:'hidden' }}>
           <div style={{ padding:'14px 20px', borderBottom:'1px solid #E8E8E2' }}>
             <div style={{ fontWeight:600, fontSize:14, color:'#0D0D0D' }}>Motivos de Desligamento</div>
-            <div style={{ fontSize:11, color:'#ABABAB' }}>Histórico acumulado</div>
+            <div style={{ fontSize:11, color:'#ABABAB' }}>Histórico por mês · todo o período</div>
           </div>
-          <div style={{ padding:20, display:'flex', flexDirection:'column', gap:14 }}>
-            {motivos.length === 0 ? (
-              <div style={{ fontSize:12, color:'#ABABAB' }}>Aguardando dados...</div>
-            ) : motivos.slice(0, 6).map((m, i) => {
-              const pct  = totalMot > 0 ? Math.round((m.qtd / totalMot) * 1000) / 10 : 0
-              const cores = ['#8C1414','#D9B504','#97A624','#6B0000','#888','#ABABAB']
-              return (
-                <div key={m.motivo}>
-                  <div style={{ display:'flex', justifyContent:'space-between', marginBottom:4 }}>
-                    <span style={{ fontSize:12, color:'#3D3D3D' }}>{m.motivo}</span>
-                    <div style={{ display:'flex', gap:8 }}>
-                      <span style={{ fontSize:12, fontWeight:600, fontFamily:"'DM Mono', monospace" }}>{m.qtd}</span>
-                      <span style={{ fontSize:11, color:'#ABABAB', fontFamily:"'DM Mono', monospace" }}>{pct}%</span>
-                    </div>
-                  </div>
-                  <div style={{ height:6, background:'#E8E8E2', borderRadius:99 }}>
-                    <div style={{ height:6, borderRadius:99, width:`${pct}%`, background:cores[i] }} />
-                  </div>
-                </div>
-              )
-            })}
+          <div style={{ padding:20 }}>
+            <GraficoMotivos historico={gas?.motivos_historico} />
           </div>
         </div>
       </div>

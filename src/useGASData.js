@@ -2,8 +2,7 @@ import { useState, useEffect } from 'react'
 
 const GAS_URL = "https://script.google.com/macros/s/AKfycby-QXglHGObJS1_YVTonnY0rXkrzkMBQZhwOqBMm2dZ46i53vdJuX7zM1SiEijtQ2H9/exec"
 
-// Meses disponíveis — só adicionar quando a planilha tiver o mês
-export const MESES = ['Jun/26']
+export const MESES     = ['Jun/26']
 export const MESES_API = ['2026-06']
 
 export const UNIDADES = [
@@ -21,17 +20,24 @@ export function useGASData(mesIdx) {
     setErro(null)
     const idx = Math.min(Math.max(Number(mesIdx) || 0, 0), MESES_API.length - 1)
     const mes = MESES_API[idx]
-    fetch(`${GAS_URL}?tipo=todos&mes=${mes}`)
-      .then(r => r.json())
-      .then(d => { if (d.erro) throw new Error(d.erro); setData(d) })
-      .catch(e => setErro(e.message))
+
+    // Busca dados principais e histórico de motivos em paralelo
+    Promise.all([
+      fetch(`${GAS_URL}?tipo=todos&mes=${mes}`).then(r => r.json()),
+      fetch(`${GAS_URL}?tipo=motivos_historico`).then(r => r.json()),
+    ])
+      .then(([principal, historico]) => {
+        if (principal.erro) throw new Error(principal.erro)
+        setData({ ...principal, motivos_historico: historico })
+      })
+      .catch(e => { console.error('GAS erro:', e); setErro(e.message) })
       .finally(() => setLoading(false))
+
   }, [mesIdx])
 
   return { data, loading, erro }
 }
 
-// Valores padrão das configurações (espelho da aba Configurações)
 export const CFG_DEFAULT = {
   meta_turnover:           5.0,
   custo_contratacao:       2514.32,
