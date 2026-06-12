@@ -165,7 +165,7 @@ export default function PageRH({ mesIdx, unidade, gas, loading }) {
           )}
         </div>
         <div style={{ padding:24 }}>
-          <GraficoMotivos historico={gas?.motivos_historico} mesSelecionado={mesSelecionado} />
+          <GraficoMotivos historico={gas?.motivos_historico} gas={gas} unidade={unidade} mesSelecionado={mesSelecionado} />
         </div>
       </div>
 
