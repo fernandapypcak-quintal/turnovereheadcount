@@ -1,6 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
-// Cores por motivo — consistentes em todo o dashboard
 const CORES_MOTIVO = {
   'Demissão sem justa causa':      '#8C1414',
   'Pedido de demissão':            '#D9B504',
@@ -18,89 +17,102 @@ function corMotivo(motivo, idx) {
 }
 
 function formatarMesLabel(mesStr) {
+  if (!mesStr) return ''
   const [ano, mes] = mesStr.split('-')
   const nomes = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
   return `${nomes[parseInt(mes)-1]}/${ano.slice(2)}`
 }
 
-export default function GraficoMotivos({ historico }) {
+// mesSelecionado: "2026-06" — destaca o mês do filtro ativo
+export default function GraficoMotivos({ historico, mesSelecionado }) {
   const [hoveredMes, setHoveredMes] = useState(null)
   const [paginaAtual, setPaginaAtual] = useState(0)
 
+  // Quando o mês selecionado mudar, navega para a página que o contém
+  useEffect(() => {
+    if (!historico || !mesSelecionado) return
+    const ordenado = [...historico].sort((a, b) => a.mes.localeCompare(b.mes))
+    const idx = ordenado.findIndex(h => h.mes === mesSelecionado)
+    if (idx >= 0) {
+      const pagina = Math.floor(idx / 12)
+      const totalPaginas = Math.ceil(ordenado.length / 12)
+      // Converte para paginação invertida (0 = mais recente)
+      setPaginaAtual(totalPaginas - 1 - pagina)
+    }
+  }, [mesSelecionado, historico])
+
   if (!historico || historico.length === 0) {
     return (
-      <div style={{ padding:20, fontSize:12, color:'#ABABAB', textAlign:'center' }}>
+      <div style={{ padding:40, fontSize:12, color:'#ABABAB', textAlign:'center' }}>
         Aguardando dados históricos...
       </div>
     )
   }
 
-  // Coletar todos os motivos únicos
-  const todosMotivos = []
-  historico.forEach(h => {
-    Object.keys(h.motivos).forEach(m => {
-      if (!todosMotivos.includes(m)) todosMotivos.push(m)
+  const historicoOrdenado = [...historico].sort((a, b) => a.mes.localeCompare(b.mes))
+
+  // Motivos únicos ordenados por total
+  const totaisPorMotivo = {}
+  historicoOrdenado.forEach(h => {
+    Object.entries(h.motivos).forEach(([m, qtd]) => {
+      totaisPorMotivo[m] = (totaisPorMotivo[m] || 0) + qtd
     })
   })
+  const todosMotivos = Object.keys(totaisPorMotivo).sort((a, b) => totaisPorMotivo[b] - totaisPorMotivo[a])
 
-  // Ordenar por total decrescente
-  const totaisPorMotivo = {}
-  todosMotivos.forEach(m => {
-    totaisPorMotivo[m] = historico.reduce((s, h) => s + (h.motivos[m] || 0), 0)
-  })
-  todosMotivos.sort((a, b) => totaisPorMotivo[b] - totaisPorMotivo[a])
+  const POR_PAGINA   = 12
+  const totalPaginas = Math.ceil(historicoOrdenado.length / POR_PAGINA)
+  const paginaReal   = totalPaginas - 1 - paginaAtual
+  const inicio       = paginaReal * POR_PAGINA
+  const pagina       = historicoOrdenado.slice(inicio, inicio + POR_PAGINA)
 
-  // Paginação — 12 meses por página
-  const POR_PAGINA = 12
-  const totalPaginas = Math.ceil(historico.length / POR_PAGINA)
-  const inicio = paginaAtual * POR_PAGINA
-  const historicoPagina = historico.slice(inicio, inicio + POR_PAGINA)
-
-  // Máximo para escala
-  const maxTotal = Math.max(...historicoPagina.map(h =>
+  const maxTotal = Math.max(...pagina.map(h =>
     Object.values(h.motivos).reduce((s, v) => s + v, 0)
-  ))
+  ), 1)
 
-  const BAR_W    = Math.max(20, Math.min(48, Math.floor(520 / historicoPagina.length) - 8))
-  const GAP      = 8
-  const H_GRAFICO = 160
-  const H_LABEL   = 28
-  const W_TOTAL   = historicoPagina.length * (BAR_W + GAP)
+  const H       = 220
+  const H_LABEL = 26
+  const BAR_W   = 52
+  const GAP     = 14
+  const W       = pagina.length * (BAR_W + GAP) - GAP
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+    <div style={{ display:'flex', flexDirection:'column', gap:20 }}>
 
       {/* Legenda */}
-      <div style={{ display:'flex', flexWrap:'wrap', gap:10 }}>
+      <div style={{ display:'flex', flexWrap:'wrap', gap:14 }}>
         {todosMotivos.map((m, i) => (
           <div key={m} style={{ display:'flex', alignItems:'center', gap:6 }}>
-            <span style={{ width:10, height:10, borderRadius:2, background:corMotivo(m,i), display:'inline-block', flexShrink:0 }} />
-            <span style={{ fontSize:11, color:'#3D3D3D' }}>{m}</span>
+            <span style={{ width:12, height:12, borderRadius:2, background:corMotivo(m,i), display:'inline-block', flexShrink:0 }} />
+            <span style={{ fontSize:12, color:'#3D3D3D' }}>{m}</span>
             <span style={{ fontSize:11, color:'#ABABAB', fontFamily:"'DM Mono', monospace" }}>({totaisPorMotivo[m]})</span>
           </div>
         ))}
       </div>
 
-      {/* Gráfico */}
-      <div style={{ overflowX:'auto' }}>
+      {/* Gráfico SVG */}
+      <div style={{ width:'100%', overflowX:'auto' }}>
         <svg
-          viewBox={`0 0 ${W_TOTAL + 8} ${H_GRAFICO + H_LABEL}`}
-          style={{ width:'100%', minWidth: W_TOTAL + 8, height:'auto' }}
+          viewBox={`0 0 ${W + 40} ${H + H_LABEL + 10}`}
+          style={{ width:'100%', minWidth: Math.min(W + 40, 500), height:'auto', display:'block' }}
         >
-          {/* Linhas de grade */}
+          {/* Eixo Y — linhas de grade */}
           {[0, 0.25, 0.5, 0.75, 1].map(f => (
-            <line key={f}
-              x1={0} y1={H_GRAFICO * f}
-              x2={W_TOTAL + 8} y2={H_GRAFICO * f}
-              stroke="#E8E8E2" strokeWidth="1"
-            />
+            <g key={f}>
+              <line x1={32} y1={H * f} x2={W + 36} y2={H * f} stroke="#E8E8E2" strokeWidth="1" />
+              <text x={28} y={H * f + 3} textAnchor="end" fontSize="9"
+                fill="#BDBDBD" fontFamily="DM Mono, monospace">
+                {Math.round(maxTotal * (1 - f))}
+              </text>
+            </g>
           ))}
 
-          {historicoPagina.map((h, i) => {
-            const x       = i * (BAR_W + GAP)
-            const total   = Object.values(h.motivos).reduce((s, v) => s + v, 0)
-            const isHover = hoveredMes === h.mes
-            let yAcum = H_GRAFICO
+          {pagina.map((h, i) => {
+            const x         = 34 + i * (BAR_W + GAP)
+            const total     = Object.values(h.motivos).reduce((s, v) => s + v, 0)
+            const isHover   = hoveredMes === h.mes
+            const isSel     = mesSelecionado && h.mes === mesSelecionado
+            let yAcum       = H
 
             return (
               <g key={h.mes}
@@ -108,98 +120,98 @@ export default function GraficoMotivos({ historico }) {
                 onMouseLeave={() => setHoveredMes(null)}
                 style={{ cursor:'default' }}>
 
-                {/* Barras empilhadas por motivo */}
+                {/* Destaque fundo mês selecionado */}
+                {(isHover || isSel) && (
+                  <rect
+                    x={x - 4} y={0}
+                    width={BAR_W + 8} height={H + H_LABEL + 4}
+                    fill={isSel ? '#F5F5F0' : '#FAFAF8'}
+                    rx="4"
+                  />
+                )}
+
+                {/* Indicador mês selecionado */}
+                {isSel && (
+                  <rect x={x - 4} y={0} width={BAR_W + 8} height={3}
+                    fill="#0D0D0D" rx="1" />
+                )}
+
+                {/* Barras empilhadas */}
                 {todosMotivos.map((m, mi) => {
-                  const qtd = h.motivos[m] || 0
+                  const qtd  = h.motivos[m] || 0
                   if (qtd === 0) return null
-                  const barH = maxTotal > 0 ? (qtd / maxTotal) * H_GRAFICO : 0
+                  const barH = (qtd / maxTotal) * H
                   yAcum -= barH
                   return (
                     <rect key={m}
                       x={x} y={yAcum}
                       width={BAR_W} height={barH}
                       fill={corMotivo(m, mi)}
-                      opacity={isHover ? 1 : 0.85}
-                      rx={mi === 0 ? 0 : 0}
+                      opacity={isHover || isSel ? 1 : 0.85}
                     />
                   )
                 })}
-
-                {/* Borda arredondada no topo da barra */}
-                {total > 0 && (
-                  <rect
-                    x={x}
-                    y={H_GRAFICO - (total / maxTotal) * H_GRAFICO}
-                    width={BAR_W} height={3}
-                    fill="transparent"
-                    rx={2}
-                  />
-                )}
 
                 {/* Total acima da barra */}
                 {total > 0 && (
                   <text
                     x={x + BAR_W / 2}
-                    y={H_GRAFICO - (total / maxTotal) * H_GRAFICO - 4}
+                    y={H - (total / maxTotal) * H - 7}
                     textAnchor="middle"
-                    fontSize={isHover ? 10 : 9}
-                    fontWeight={isHover ? '700' : '400'}
-                    fill={isHover ? '#0D0D0D' : '#ABABAB'}
+                    fontSize={isHover || isSel ? 11 : 10}
+                    fontWeight={isHover || isSel ? '700' : '500'}
+                    fill={isHover || isSel ? '#0D0D0D' : '#888'}
                     fontFamily="DM Mono, monospace"
                   >
                     {total}
                   </text>
                 )}
 
-                {/* Label do mês */}
+                {/* Label mês */}
                 <text
                   x={x + BAR_W / 2}
-                  y={H_GRAFICO + 16}
+                  y={H + 18}
                   textAnchor="middle"
-                  fontSize={9}
-                  fill={isHover ? '#0D0D0D' : '#ABABAB'}
-                  fontWeight={isHover ? '700' : '400'}
+                  fontSize={10}
+                  fill={isSel ? '#0D0D0D' : isHover ? '#3D3D3D' : '#ABABAB'}
+                  fontWeight={isSel ? '700' : isHover ? '600' : '400'}
                   fontFamily="DM Sans, sans-serif"
                 >
                   {formatarMesLabel(h.mes)}
                 </text>
 
-                {/* Tooltip ao hover */}
-                {isHover && (
-                  <g>
-                    <rect
-                      x={Math.min(x - 4, W_TOTAL - 130)}
-                      y={H_GRAFICO - (total / maxTotal) * H_GRAFICO - 80}
-                      width={126}
-                      height={todosMotivos.filter(m => h.motivos[m] > 0).length * 16 + 20}
-                      fill="white"
-                      stroke="#E8E8E2"
-                      strokeWidth="1"
-                      rx="4"
-                    />
-                    <text
-                      x={Math.min(x + 2, W_TOTAL - 122)}
-                      y={H_GRAFICO - (total / maxTotal) * H_GRAFICO - 64}
-                      fontSize={9}
-                      fontWeight="700"
-                      fill="#0D0D0D"
-                      fontFamily="DM Sans, sans-serif"
-                    >
-                      {formatarMesLabel(h.mes)} · {total} deslig.
-                    </text>
-                    {todosMotivos.filter(m => h.motivos[m] > 0).map((m, ti) => (
-                      <text key={m}
-                        x={Math.min(x + 2, W_TOTAL - 122)}
-                        y={H_GRAFICO - (total / maxTotal) * H_GRAFICO - 48 + ti * 14}
-                        fontSize={9}
-                        fill="#3D3D3D"
-                        fontFamily="DM Sans, sans-serif"
-                      >
-                        ● {m.substring(0, 22)}: {h.motivos[m]}
+                {/* Tooltip hover */}
+                {isHover && total > 0 && (() => {
+                  const linhas = todosMotivos.filter(m => h.motivos[m] > 0)
+                  const ttW    = 168
+                  const ttH    = linhas.length * 16 + 26
+                  const barTop = H - (total / maxTotal) * H
+                  const ttY    = Math.max(4, barTop - ttH - 10)
+                  const ttX    = Math.min(x + BAR_W / 2 - ttW / 2, W + 36 - ttW)
+                  return (
+                    <g>
+                      <rect x={ttX} y={ttY} width={ttW} height={ttH}
+                        fill="white" stroke="#E8E8E2" strokeWidth="1" rx="6" />
+                      <text x={ttX + 10} y={ttY + 15}
+                        fontSize={10} fontWeight="700" fill="#0D0D0D"
+                        fontFamily="DM Sans, sans-serif">
+                        {formatarMesLabel(h.mes)} · {total} deslig.
                       </text>
-                    ))}
-                  </g>
-                )}
+                      {linhas.map((m, ti) => (
+                        <g key={m}>
+                          <rect x={ttX + 10} y={ttY + 22 + ti * 16}
+                            width={8} height={8} rx="1"
+                            fill={corMotivo(m, todosMotivos.indexOf(m))} />
+                          <text x={ttX + 22} y={ttY + 30 + ti * 16}
+                            fontSize={9} fill="#3D3D3D"
+                            fontFamily="DM Sans, sans-serif">
+                            {m.length > 26 ? m.substring(0,26)+'…' : m}: {h.motivos[m]}
+                          </text>
+                        </g>
+                      ))}
+                    </g>
+                  )
+                })()}
               </g>
             )
           })}
@@ -210,21 +222,47 @@ export default function GraficoMotivos({ historico }) {
       {totalPaginas > 1 && (
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
           <button
+            onClick={() => setPaginaAtual(p => Math.min(totalPaginas - 1, p + 1))}
+            disabled={paginaAtual >= totalPaginas - 1}
+            style={{
+              padding:'6px 16px', borderRadius:6,
+              border:'1px solid #E8E8E2', background:'#fff',
+              cursor: paginaAtual >= totalPaginas - 1 ? 'not-allowed' : 'pointer',
+              color: paginaAtual >= totalPaginas - 1 ? '#BDBDBD' : '#0D0D0D',
+              fontSize:12, fontFamily:"'DM Sans', sans-serif",
+            }}>
+            ← Mais antigo
+          </button>
+
+          <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6 }}>
+            <span style={{ fontSize:12, color:'#0D0D0D', fontWeight:600 }}>
+              {formatarMesLabel(pagina[0]?.mes)} – {formatarMesLabel(pagina[pagina.length-1]?.mes)}
+            </span>
+            <div style={{ display:'flex', gap:4 }}>
+              {Array.from({ length: totalPaginas }).map((_, pi) => (
+                <div key={pi}
+                  onClick={() => setPaginaAtual(pi)}
+                  style={{
+                    width: pi === paginaAtual ? 18 : 6, height:6,
+                    borderRadius:99, cursor:'pointer',
+                    background: pi === paginaAtual ? '#0D0D0D' : '#E8E8E2',
+                    transition:'width 0.2s',
+                  }} />
+              ))}
+            </div>
+          </div>
+
+          <button
             onClick={() => setPaginaAtual(p => Math.max(0, p - 1))}
             disabled={paginaAtual === 0}
-            style={{ padding:'4px 12px', borderRadius:6, border:'1px solid #E8E8E2', background:'#fff', cursor: paginaAtual === 0 ? 'not-allowed' : 'pointer', color: paginaAtual === 0 ? '#BDBDBD' : '#0D0D0D', fontSize:12 }}>
-            ← Anterior
-          </button>
-          <span style={{ fontSize:11, color:'#ABABAB' }}>
-            {formatarMesLabel(historicoPagina[0]?.mes)} – {formatarMesLabel(historicoPagina[historicoPagina.length-1]?.mes)}
-            <span style={{ marginLeft:8, color:'#D0D0CA' }}>·</span>
-            <span style={{ marginLeft:8 }}>{paginaAtual + 1}/{totalPaginas}</span>
-          </span>
-          <button
-            onClick={() => setPaginaAtual(p => Math.min(totalPaginas - 1, p + 1))}
-            disabled={paginaAtual === totalPaginas - 1}
-            style={{ padding:'4px 12px', borderRadius:6, border:'1px solid #E8E8E2', background:'#fff', cursor: paginaAtual === totalPaginas - 1 ? 'not-allowed' : 'pointer', color: paginaAtual === totalPaginas - 1 ? '#BDBDBD' : '#0D0D0D', fontSize:12 }}>
-            Próximo →
+            style={{
+              padding:'6px 16px', borderRadius:6,
+              border:'1px solid #E8E8E2', background:'#fff',
+              cursor: paginaAtual === 0 ? 'not-allowed' : 'pointer',
+              color: paginaAtual === 0 ? '#BDBDBD' : '#0D0D0D',
+              fontSize:12, fontFamily:"'DM Sans', sans-serif",
+            }}>
+            Mais recente →
           </button>
         </div>
       )}

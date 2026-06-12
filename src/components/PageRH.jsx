@@ -61,6 +61,7 @@ export default function PageRH({ mesIdx, unidade, gas, loading }) {
     : []
 
   const rankFilt = unidade === 'Todas' ? ranking : ranking.filter(x => x.u === unidade)
+  const mesSelecionado = ['2026-01','2026-02','2026-03','2026-04','2026-05','2026-06'][mesIdx] ?? '2026-06'
   const corTurn  = st(turnMedio)
 
   return (
@@ -107,8 +108,8 @@ export default function PageRH({ mesIdx, unidade, gas, loading }) {
         </div>
       </div>
 
-      {/* Resumo por unidade + Motivos */}
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 320px', gap:16 }}>
+      {/* Resumo por unidade */}
+      <div style={{ display:'grid', gridTemplateColumns:'1fr', gap:16 }}>
         <div style={{ background:'#fff', border:'1px solid #E8E8E2', borderRadius:8, overflow:'hidden' }}>
           <div style={{ padding:'14px 20px', borderBottom:'1px solid #E8E8E2' }}>
             <div style={{ fontWeight:600, fontSize:14, color:'#0D0D0D' }}>Resumo por Unidade</div>
@@ -148,14 +149,23 @@ export default function PageRH({ mesIdx, unidade, gas, loading }) {
           </div>
         </div>
 
-        <div style={{ background:'#fff', border:'1px solid #E8E8E2', borderRadius:8, overflow:'hidden' }}>
-          <div style={{ padding:'14px 20px', borderBottom:'1px solid #E8E8E2' }}>
+      </div>
+
+      {/* Motivos — largura total */}
+      <div style={{ background:'#fff', border:'1px solid #E8E8E2', borderRadius:8, overflow:'hidden' }}>
+        <div style={{ padding:'14px 20px', borderBottom:'1px solid #E8E8E2', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+          <div>
             <div style={{ fontWeight:600, fontSize:14, color:'#0D0D0D' }}>Motivos de Desligamento</div>
-            <div style={{ fontSize:11, color:'#ABABAB' }}>Histórico por mês · todo o período</div>
+            <div style={{ fontSize:11, color:'#ABABAB' }}>Histórico por mês · todo o período disponível</div>
           </div>
-          <div style={{ padding:20 }}>
-            <GraficoMotivos historico={gas?.motivos_historico} />
-          </div>
+          {gas?.motivos_historico && (
+            <div style={{ fontSize:11, color:'#ABABAB' }}>
+              {gas.motivos_historico.length} meses · {gas.motivos_historico.reduce((s,m)=>s+Object.values(m.motivos).reduce((a,b)=>a+b,0),0)} desligamentos
+            </div>
+          )}
+        </div>
+        <div style={{ padding:24 }}>
+          <GraficoMotivos historico={gas?.motivos_historico} mesSelecionado={mesSelecionado} />
         </div>
       </div>
 
