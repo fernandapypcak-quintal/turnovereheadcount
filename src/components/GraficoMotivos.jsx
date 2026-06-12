@@ -183,29 +183,31 @@ export default function GraficoMotivos({ historico, mesSelecionado }) {
                 {/* Tooltip hover */}
                 {isHover && total > 0 && (() => {
                   const linhas = todosMotivos.filter(m => h.motivos[m] > 0)
-                  const ttW    = 168
-                  const ttH    = linhas.length * 16 + 26
+                  const ttW    = 150
+                  const ttH    = linhas.length * 13 + 22
                   const barTop = H - (total / maxTotal) * H
-                  const ttY    = Math.max(4, barTop - ttH - 10)
-                  const ttX    = Math.min(x + BAR_W / 2 - ttW / 2, W + 36 - ttW)
+                  const ttY    = Math.max(2, barTop - ttH - 8)
+                  // Garante que não sai pela direita nem pela esquerda
+                  const ttXraw = x + BAR_W / 2 - ttW / 2
+                  const ttX    = Math.max(32, Math.min(ttXraw, W + 36 - ttW - 4))
                   return (
-                    <g>
+                    <g style={{ pointerEvents:'none' }}>
                       <rect x={ttX} y={ttY} width={ttW} height={ttH}
-                        fill="white" stroke="#E8E8E2" strokeWidth="1" rx="6" />
-                      <text x={ttX + 10} y={ttY + 15}
-                        fontSize={10} fontWeight="700" fill="#0D0D0D"
+                        fill="white" stroke="#E8E8E2" strokeWidth="1" rx="4" />
+                      <text x={ttX + 8} y={ttY + 12}
+                        fontSize={9} fontWeight="700" fill="#0D0D0D"
                         fontFamily="DM Sans, sans-serif">
                         {formatarMesLabel(h.mes)} · {total} deslig.
                       </text>
                       {linhas.map((m, ti) => (
                         <g key={m}>
-                          <rect x={ttX + 10} y={ttY + 22 + ti * 16}
-                            width={8} height={8} rx="1"
+                          <rect x={ttX + 8} y={ttY + 18 + ti * 13}
+                            width={6} height={6} rx="1"
                             fill={corMotivo(m, todosMotivos.indexOf(m))} />
-                          <text x={ttX + 22} y={ttY + 30 + ti * 16}
-                            fontSize={9} fill="#3D3D3D"
+                          <text x={ttX + 17} y={ttY + 25 + ti * 13}
+                            fontSize={8} fill="#3D3D3D"
                             fontFamily="DM Sans, sans-serif">
-                            {m.length > 26 ? m.substring(0,26)+'…' : m}: {h.motivos[m]}
+                            {m.length > 22 ? m.substring(0,22)+'…' : m}: {h.motivos[m]}
                           </text>
                         </g>
                       ))}
